@@ -2,10 +2,13 @@ import { heisterCountFor, MAX_PLAYERS, MIN_PLAYERS } from '../../shared/engine';
 import type { Settings, View } from '../../shared/types';
 import { Chat } from '../components/Chat';
 import { TopBar } from '../components/Panels';
+import { TokenIcon } from '../components/Token';
+import { SPECTATOR_IDENTITY, seatIdentities, tokenText } from '../game/identity';
 import type { Game } from '../net/useGame';
 
 export function Lobby({ game, view }: { game: Game; view: View }) {
   const me = view.players.find((p) => p.id === view.me)!;
+  const ids = seatIdentities(view.players);
   const seated = view.players.filter((p) => !p.wantsSpectate);
   const n = seated.length;
   const h = n >= MIN_PLAYERS ? heisterCountFor(view.settings, n) : 0;
@@ -37,6 +40,7 @@ export function Lobby({ game, view }: { game: Game; view: View }) {
           <ul className="seat-list">
             {view.players.map((p) => (
               <li key={p.id} className={p.connected ? '' : 'offline'}>
+                <TokenIcon role={p.role} identity={ids[p.id] ?? SPECTATOR_IDENTITY} text={tokenText(p)} size={30} />
                 <span className="pname">{p.name}{p.id === view.me && <em> (you)</em>}{p.isHost && <span className="tag gold">Host</span>}</span>
                 {p.wantsSpectate && <span className="tag">{p.isHost ? 'Facilitator (sees all)' : 'Spectator'}</span>}
                 {me.isHost && p.id !== me.id && <button className="btn ghost small" onClick={() => game.kick(p.id)}>Remove</button>}

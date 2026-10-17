@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { stationLabel } from '../../shared/map';
 import type { PublicPlayer, View } from '../../shared/types';
+import { ART } from '../game/art';
+import { SPECTATOR_IDENTITY, tokenText, type Identity } from '../game/identity';
+import { TokenIcon } from './Token';
 
 export function useCountdown(deadline: number | null, offset: number) {
   const [now, setNow] = useState(() => Date.now() + offset);
@@ -27,11 +30,11 @@ export function TopBar({ view, offset, onLeave }: { view: View; offset: number; 
       <div className="room">Room <strong>{view.code}</strong></div>
       {view.phase !== 'lobby' && (
         <>
-          <div className="round">Round <strong>{Math.max(view.round, 0)}</strong>/{view.settings.maxRounds}</div>
-          <div className={`phase phase-${view.phase}`}>{PHASE_NAME[view.phase]}</div>
+          <div className="round">Round <strong key={view.round} className="pop">{Math.max(view.round, 0)}</strong>/{view.settings.maxRounds}</div>
+          <div key={view.phase} className={`phase phase-${view.phase}`}>{PHASE_NAME[view.phase]}</div>
           {secs !== null && <div className={`timer ${secs <= 10 ? 'urgent' : ''}`} aria-live="off">{mm}</div>}
           <div className="taken" title="Artifacts taken, as announced after each Heister Phase">
-            <img src="/assets/artifact.png" alt="" width={22} height={22} /> {view.announcedTaken}/{view.settings.artifactCount} taken
+            <img src="/assets/artifact.png" alt="" width={22} height={22} /> <span key={view.announcedTaken} className="pop">{view.announcedTaken}</span>/{view.settings.artifactCount} taken
           </div>
         </>
       )}
@@ -58,32 +61,89 @@ function actsThisPhase(phase: View['phase'], p: PublicPlayer) {
   return phase === 'info';
 }
 
-export function PlayerList({ view }: { view: View }) {
+interface PlayerListProps {
+  view: View;
+  ids: Record<string, Identity>;
+  focus: string | null;
+  setFocus: (id: string | null) => void;
+}
+
+export function PlayerList({ view, ids, focus, setFocus }: PlayerListProps) {
   const order = { heister: 0, traitor: 1, police: 1, unknown: 2, spectator: 3 } as const;
   const players = [...view.players].sort((a, b) => order[a.role] - order[b.role]);
   return (
     <section className="panel players">
       <h3>Players</h3>
       <ul>
-        {players.map((p) => (
-          <li key={p.id} className={`${p.connected ? '' : 'offline'} ${p.status !== 'active' ? 'out' : ''}`}>
-            <span className="pname">{p.name}{p.id === view.me && <em> (you)</em>}{p.isHost && <span title="Host"> ★</span>}</span>
-            {roleBadge(p)}
-            <span className="pmeta">
-              {p.station ? stationLabel(p.station) : p.role === 'heister' && p.status === 'active' ? 'Location unknown' : ''}
-              {p.carried !== null && p.role === 'heister' ? ` · ${p.carried} carried` : ''}
-              {p.status !== 'active' && ` · ${p.status}`}
-              {p.skipsPolice && ' · sitting out'}
-              {p.cannotArrest && ' · no arrests'}
-              {!p.connected && ' · offline'}
-            </span>
-            {actsThisPhase(view.phase, p) && (
-              <span className={`ready ${p.done ? 'yes' : ''}`} title={p.done ? 'Done' : 'Thinking'}>{p.done ? '✓' : '…'}</span>
-            )}
-          </li>
-        ))}
+        {players.map((p) => {
+          const id = ids[p.id] ?? SPECTATOR_IDENTITY;
+          return (
+            <li key={p.id} style={{ '--seat': id.color } as React.CSSProperties}
+              className={`${p.connected ? '' : 'offline'} ${p.status !== 'active' ? 'out' : ''} ${focus === p.id ? 'focused' : ''}`}
+              onMouseEnter={() => setFocus(p.id)} onMouseLeave={() => setFocus(null)}
+              onClick={() => setFocus(focus === p.id ? null : p.id)} title={`${id.name} token`}>
+              <TokenIcon role={p.role} identity={id} text={tokenText(p)} size={34} />
+              <span className="pname">{p.name}{p.id === view.me && <em> (you)</em>}{p.isHost && <span title="Host"> ★</span>}</span>
+              {roleBadge(p)}
+              <span className="pmeta">
+                {p.station ? stationLabel(p.station) : p.role === 'heister' && p.status === 'active' ? 'Location unknown' : ''}
+                {p.carried !== null && p.role === 'heister' ? ` · ${p.carried} carried` : ''}
+                {p.status !== 'active' && ` · ${p.status}`}
+                {p.skipsPolice && ' · sitting out'}
+                {p.cannotArrest && ' · no arrests'}
+                {!p.connected && ' · offline'}
+              </span>
+              {actsThisPhase(view.phase, p) && (
+                <span className={`ready ${p.done ? 'yes' : ''}`} title={p.done ? 'Done' : 'Thinking'}>{p.done ? '✓' : '…'}</span>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </section>
+  );
+}
+
+const isOfficer = (role: string) => role === 'police' || role === 'traitor';
+
+function bannerSub(view: View): string {
+  const role = view.myRole;
+  switch (view.phase) {
+    case 'heister': return role === 'heister' ? 'Your move. Slip through the network.' : 'The Heisters are on the move…';
+    case 'police': return isOfficer(role) ? 'Your move. Search, chase, arrest.' : 'The Police are closing in…';
+    case 'info': return role === 'heister' ? 'The Police compare notes…' : 'Share what you found. Someone is lying.';
+    case 'ended': return view.endReason ?? '';
+    default: return '';
+  }
+}
+
+// A full-width title card that sweeps across the screen whenever the phase changes.
+export function PhaseBanner({ view }: { view: View }) {
+  const key = `${view.phase}:${view.round}`;
+  const seen = useRef(key);
+  const [shown, setShown] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (seen.current === key) return; // no banner for the phase you joined or reloaded into
+    seen.current = key;
+    if (view.phase === 'setup' || view.phase === 'lobby') return; // the role card covers setup
+    setShown(key);
+    const t = setTimeout(() => setShown(null), view.phase === 'ended' ? 3600 : 2300);
+    return () => clearTimeout(t);
+  }, [key, view.phase]);
+
+  if (!shown) return null;
+  const ended = view.phase === 'ended';
+  const art = ART.banner[view.phase];
+  const title = ended ? (view.winner === 'heisters' ? 'The Heisters got away' : 'Case closed') : PHASE_NAME[view.phase];
+  return (
+    <div className={`phase-banner banner-${view.phase} ${ended ? `win-${view.winner}` : ''}`} key={shown} aria-hidden="true">
+      <div className="band" style={art ? { backgroundImage: `url(${art})` } : undefined}>
+        <div className="kicker">{ended ? 'Final verdict' : `Round ${view.round} of ${view.settings.maxRounds}`}</div>
+        <div className="big">{title}</div>
+        <div className="sub">{bannerSub(view)}</div>
+      </div>
+    </div>
   );
 }
 
@@ -96,7 +156,7 @@ export function Envelopes({ view }: { view: View }) {
       {list.length === 0 && <p className="muted">Search a station to receive a sealed envelope. Its contents are private to you.</p>}
       <div className="env-list">
         {list.map((e, i) => (
-          <article key={e.id} className={`envelope ${e.kind} ${i === 0 ? 'newest' : ''}`}>
+          <article key={e.id} className={`envelope ${e.kind} ${i === 0 ? 'newest' : ''}`} style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}>
             <header>
               <span>{e.title}</span>
               <span className="env-round">R{e.round}{view.godView ? ` · ${view.players.find((p) => p.id === e.to)?.name}` : ''}</span>

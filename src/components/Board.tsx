@@ -1,6 +1,9 @@
-import { memo, useMemo } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { LINES, MAP_HEIGHT, MAP_WIDTH, STATIONS, STATION_BY_ID, linesAt, lineName, type LabelSide } from '../../shared/map';
 import type { PublicPlayer, View } from '../../shared/types';
+import { SPECTATOR_IDENTITY, seatIdentities, tokenText, type Identity } from '../game/identity';
+import { trackPoints } from '../game/route';
+import { TokenShape } from './Token';
 
 const PAD = 50; // room for labels at the map edges
 
@@ -11,6 +14,9 @@ interface Props {
   marks?: Record<string, Mark>;
   onStation?: (id: string) => void;
   showTrails?: boolean;
+  showNames?: boolean;
+  focus?: string | null; // player id to spotlight
+  onFocus?: (id: string | null) => void;
 }
 
 const LABEL_OFFSET: Record<LabelSide, [number, number, 'start' | 'middle' | 'end']> = {
@@ -46,36 +52,155 @@ const StaticMap = memo(function StaticMap() {
   );
 });
 
-function initials(name: string) {
-  return name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+const reduceMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+interface PawnProps {
+  p: PublicPlayer;
+  identity: Identity;
+  x: number;
+  y: number;
+  station: string;
+  me: boolean;
+  focused: boolean;
+  dimmed: boolean;
+  showTag: boolean;
+  clickable: boolean;
+  onClick: () => void;
+  onHover: (id: string | null) => void;
 }
 
-function Pawn({ p, x, y, me }: { p: PublicPlayer; x: number; y: number; me: boolean }) {
+function Pawn({ p, identity, x, y, station, me, focused, dimmed, showTag, clickable, onClick, onHover }: PawnProps) {
+  const ref = useRef<SVGGElement>(null);
+  const last = useRef<{ x: number; y: number; station: string } | null>(null);
+
+  // Slide along the rails from where the pawn was to where it is now.
+  useLayoutEffect(() => {
+    const from = last.current;
+    last.current = { x, y, station };
+    const el = ref.current;
+    if (!el || !from || (from.x === x && from.y === y) || reduceMotion()) return;
+    const pts = from.station === station ? [from, { x, y }] : [from, ...trackPoints(from.station, station), { x, y }];
+    const lens = pts.map((pt, i) => (i ? Math.hypot(pt.x - pts[i - 1].x, pt.y - pts[i - 1].y) : 0));
+    const total = lens.reduce((a, b) => a + b, 0) || 1;
+    let run = 0;
+    const frames = pts.map((pt, i) => {
+      run += lens[i];
+      return { transform: `translate(${pt.x}px, ${pt.y}px)`, offset: run / total };
+    });
+    const anim = el.animate(frames, { duration: Math.min(2400, Math.max(320, total * 2.2)), easing: 'cubic-bezier(.45,0,.25,1)' });
+    el.classList.add('moving');
+    anim.onfinish = anim.oncancel = () => el.classList.remove('moving');
+    return () => anim.cancel();
+  }, [x, y, station]);
+
   const heister = p.role === 'heister';
-  const fill = heister ? 'var(--red)' : p.role === 'traitor' ? 'var(--green)' : 'var(--navy)';
-  const faded = p.status === 'arrested' || p.status === 'exposed';
+  const name = p.name.length > 11 ? `${p.name.slice(0, 10)}…` : p.name;
+  const tagW = name.length * 10.5 + 24;
   return (
-    <g transform={`translate(${x} ${y})`} opacity={faded ? 0.45 : 1} className="pawn">
-      <rect x={-17} y={-17} width={34} height={34} transform="rotate(45)" fill={fill}
-        stroke={me ? 'var(--gold)' : '#fff'} strokeWidth={me ? 5 : 3} rx={3} />
-      <text y={6} textAnchor="middle" className="pawn-text">{heister ? p.label : initials(p.name)}</text>
-      {p.status === 'arrested' && <path d="M-14 -14 L14 14 M14 -14 L-14 14" stroke="#fff" strokeWidth={4} />}
-      <title>{`${p.name}${heister ? ` (${p.label})` : ''}${p.status !== 'active' ? ` · ${p.status}` : ''}`}</title>
+    <g ref={ref} style={{ transform: `translate(${x}px, ${y}px)` }}
+      className={`pawn ${me ? 'me' : ''} ${focused ? 'focused' : ''} ${dimmed ? 'dim' : ''} ${p.status} ${clickable ? 'clickable' : ''}`}
+      onMouseEnter={() => onHover(p.id)} onMouseLeave={() => onHover(null)} onClick={onClick}>
+      <g className="pawn-body">
+        <g transform="scale(1.2)">
+          {me && <circle r={42} className="me-halo" />}
+          <TokenShape role={p.role} identity={identity} text={tokenText(p)} />
+          {heister && p.carried !== null && p.carried > 0 && (
+            <g transform="translate(26 -26)" className="carry-badge">
+              <circle r={13} fill="var(--gold)" stroke="#0b0d11" strokeWidth={3} />
+              <text y={6} textAnchor="middle" key={p.carried}>{p.carried}</text>
+            </g>
+          )}
+          {p.status === 'arrested' && (
+            <g className="cuffs">
+              <circle r={34} className="burst" />
+              <path d="M-20 -20 L20 20 M20 -20 L-20 20" stroke="#0b0d11" strokeWidth={11} strokeLinecap="round" />
+              <path d="M-20 -20 L20 20 M20 -20 L-20 20" stroke="#ff4d4d" strokeWidth={6} strokeLinecap="round" />
+            </g>
+          )}
+        </g>
+      </g>
+      {(showTag || focused) && (
+        <g className="pawn-tag">
+          <rect x={-tagW / 2} y={46} width={tagW} height={28} rx={14} stroke={identity.color} />
+          <text y={66} textAnchor="middle" className={me ? 'mine' : ''}>{name}</text>
+        </g>
+      )}
+      <title>{`${p.name} · ${identity.name}${heister ? ` · ${p.label} Heister` : ''}${p.status !== 'active' ? ` · ${p.status}` : ''}`}</title>
     </g>
   );
 }
 
-export function Board({ view, marks = {}, onStation, showTrails }: Props) {
+// Artifacts pop in, and fly off with a glint when a Heister picks them up.
+function ArtifactLayer({ artifacts }: { artifacts: Record<string, number> | null }) {
+  const prev = useRef(artifacts);
+  const [gone, setGone] = useState<{ id: string; key: number }[]>([]);
+
+  useEffect(() => {
+    const before = prev.current;
+    prev.current = artifacts;
+    if (!before || !artifacts) return;
+    const lost = Object.keys(before).filter((id) => (artifacts[id] ?? 0) < before[id]).map((id) => ({ id, key: Math.random() }));
+    if (!lost.length) return;
+    setGone((g) => [...g, ...lost]);
+    setTimeout(() => setGone((g) => g.filter((x) => !lost.includes(x))), 1000);
+  }, [artifacts]);
+
+  return (
+    <g pointerEvents="none">
+      {artifacts && Object.entries(artifacts).map(([id, n]) => {
+        const st = STATION_BY_ID[id];
+        return (
+          <g key={id} transform={`translate(${st.x + 18} ${st.y - 22})`}>
+            <g className="artifact">
+              <image href="/assets/artifact.png" x={-15} y={-15} width={30} height={30} />
+              {n > 1 && <text key={n} x={14} y={-10} className="artifact-count">×{n}</text>}
+            </g>
+          </g>
+        );
+      })}
+      {gone.map(({ id, key }) => {
+        const st = STATION_BY_ID[id];
+        return (
+          <g key={key} transform={`translate(${st.x + 18} ${st.y - 22})`}>
+            <circle r={18} className="artifact-glint" />
+            <image href="/assets/artifact.png" x={-15} y={-15} width={30} height={30} className="artifact-gone" />
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+export function Board({ view, marks = {}, onStation, showTrails, showNames = true, focus = null, onFocus }: Props) {
+  const ids = useMemo(() => seatIdentities(view?.players ?? []), [view?.players]);
+
+  // Pawns in player order (yours last, so it draws on top), fanned out around shared stations.
+  const pawns = useMemo(() => {
+    const shown = (view?.players ?? []).filter((p) => p.station && p.role !== 'spectator' && p.status !== 'escaped');
+    const crowd: Record<string, PublicPlayer[]> = {};
+    for (const p of shown) (crowd[p.station!] ??= []).push(p);
+    const list = shown.map((p) => {
+      const here = crowd[p.station!];
+      const n = here.length;
+      const i = here.indexOf(p);
+      const angle = n === 1 ? -Math.PI / 4 : (i / n) * Math.PI * 2 - Math.PI / 2;
+      const r = n === 1 ? 46 : Math.max(54, n * 13);
+      const st = STATION_BY_ID[p.station!];
+      return { p, station: p.station!, crowded: n > 1, x: Math.round(st.x + Math.cos(angle) * r), y: Math.round(st.y + Math.sin(angle) * r) };
+    });
+    return [...list.filter((d) => d.p.id !== view?.me), ...list.filter((d) => d.p.id === view?.me)];
+  }, [view?.players, view?.me]);
+
   const occupants = useMemo(() => {
-    const by: Record<string, PublicPlayer[]> = {};
-    for (const p of view?.players ?? []) {
-      if (!p.station || p.role === 'spectator' || p.status === 'escaped') continue;
-      (by[p.station] ??= []).push(p);
-    }
+    const by: Record<string, string[]> = {};
+    for (const { p, station } of pawns) (by[station] ??= []).push(p.name);
     return by;
-  }, [view?.players]);
+  }, [pawns]);
 
   const trails = showTrails && view?.trails ? view.trails : null;
+  // Only spotlight someone the viewer can actually see on the map.
+  const spot = focus && (pawns.some((d) => d.p.id === focus) || trails?.[focus]) ? focus : null;
+  const hover = (id: string | null) => onFocus?.(id);
 
   return (
     <svg viewBox={`${-PAD} 0 ${MAP_WIDTH + PAD * 2} ${MAP_HEIGHT}`} className="board" role="img" aria-label="Transit map game board">
@@ -90,12 +215,12 @@ export function Board({ view, marks = {}, onStation, showTrails }: Props) {
       <StaticMap />
 
       {trails && Object.entries(trails).map(([pid, steps]) => {
-        const p = view!.players.find((x) => x.id === pid);
         const pts = steps.map((s) => `${STATION_BY_ID[s.station].x},${STATION_BY_ID[s.station].y}`).join(' ');
+        const dim = spot && spot !== pid;
         return (
-          <g key={pid} pointerEvents="none">
+          <g key={pid} pointerEvents="none" className="trail" opacity={dim ? 0.25 : 1}>
             <polyline points={pts} fill="none" stroke="#000" strokeWidth={14} strokeLinecap="round" strokeLinejoin="round" opacity={0.7} />
-            <polyline points={pts} fill="none" stroke={p?.label === 'H2' ? '#ffd23f' : '#ff4d4d'}
+            <polyline points={pts} fill="none" stroke={(ids[pid] ?? SPECTATOR_IDENTITY).color} className="trail-dash"
               strokeWidth={7} strokeDasharray="16 10" strokeLinecap="round" strokeLinejoin="round" />
           </g>
         );
@@ -105,12 +230,12 @@ export function Board({ view, marks = {}, onStation, showTrails }: Props) {
         const mark = marks[st.id];
         const [dx, dy, anchor] = LABEL_OFFSET[st.label];
         const clickable = !!onStation && !!mark;
-        const occ = occupants[st.id]?.map((p) => p.name).join(', ');
+        const occ = occupants[st.id]?.join(', ');
         return (
           <g key={st.id} className={`station ${mark ? `mark-${mark}` : ''} ${clickable ? 'clickable' : ''}`}
             onClick={() => onStation && mark && onStation(st.id)}>
-            {mark && <circle cx={st.x} cy={st.y} r={31} className="mark-ring" />}
-            {st.exit && <circle cx={st.x} cy={st.y} r={30} fill="none" stroke="#f7e11b" strokeWidth={8} />}
+            {mark && <circle key={mark} cx={st.x} cy={st.y} r={31} className="mark-ring" />}
+            {st.exit && <circle cx={st.x} cy={st.y} r={30} fill="none" stroke="#f7e11b" strokeWidth={8} className="exit-ring" />}
             {st.interchange ? (
               <>
                 <circle cx={st.x} cy={st.y} r={24} fill="#fff" />
@@ -128,24 +253,14 @@ export function Board({ view, marks = {}, onStation, showTrails }: Props) {
         );
       })}
 
-      {view?.artifacts && Object.entries(view.artifacts).map(([id, n]) => {
-        const st = STATION_BY_ID[id];
-        return (
-          <g key={id} transform={`translate(${st.x + 18} ${st.y - 22})`} pointerEvents="none">
-            <image href="/assets/artifact.png" x={-15} y={-15} width={30} height={30} />
-            {n > 1 && <text x={14} y={-10} className="artifact-count">×{n}</text>}
-          </g>
-        );
-      })}
+      <ArtifactLayer artifacts={view?.artifacts ?? null} />
 
-      {Object.entries(occupants).map(([id, ps]) => {
-        const st = STATION_BY_ID[id];
-        return ps.map((p, i) => {
-          const angle = ps.length === 1 ? -Math.PI / 4 : (i / ps.length) * Math.PI * 2 - Math.PI / 2;
-          const r = ps.length === 1 ? 30 : 34;
-          return <Pawn key={p.id} p={p} me={p.id === view?.me} x={st.x + Math.cos(angle) * r} y={st.y + Math.sin(angle) * r} />;
-        });
-      })}
+      {pawns.map(({ p, station, crowded, x, y }) => (
+        <Pawn key={p.id} p={p} identity={ids[p.id] ?? SPECTATOR_IDENTITY} x={x} y={y} station={station}
+          me={p.id === view?.me} focused={spot === p.id} dimmed={!!spot && spot !== p.id}
+          showTag={showNames && !crowded} clickable={!!onStation && !!marks[station]}
+          onClick={() => onStation && marks[station] && onStation(station)} onHover={hover} />
+      ))}
 
       <rect x={-PAD} width={MAP_WIDTH + PAD * 2} height={MAP_HEIGHT} fill="url(#vignette)" pointerEvents="none" />
     </svg>

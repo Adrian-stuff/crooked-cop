@@ -46,6 +46,16 @@ Chat channels: **All** (everyone), **Police** (all officers, including the Crook
 only), and **DMs** (the host can turn DMs off). If the host sits out as facilitator, they see everything and can
 read team chats.
 
+### Player tokens and artwork
+
+Each seated player gets one colour (in join order, up to 8) that follows them across the board token, player
+list, chat and Heister trail. Token shape shows the role: a shield for officers, a diamond with a red frame for
+Heisters. Hovering a player in the list spotlights their token on the map.
+
+Everything is drawn in vector art, so no images are required. To swap in final artwork, put the files in
+`public/assets` and set their paths in `src/game/art.ts`: one token image per role, optional per-seat
+portraits, and phase-banner backgrounds. Any slot left `null` keeps the vector fallback.
+
 ## Rule interpretations
 
 Where the GDD was ambiguous these are the choices made (agreed in planning or picked as defaults). All the

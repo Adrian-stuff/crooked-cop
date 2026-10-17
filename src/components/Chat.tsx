@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { dmChannel, dmParticipants } from '../../shared/chat';
 import type { ChatMessage, View } from '../../shared/types';
+import { seatIdentities } from '../game/identity';
 
 interface Props {
   view: View;
@@ -35,6 +36,7 @@ export function Chat({ view, messages, say }: Props) {
 
   const current = tabs.some((t) => t.id === channel) ? channel : 'lobby';
   const shown = messages.filter((m) => m.channel === current);
+  const ids = useMemo(() => seatIdentities(view.players), [view.players]);
 
   useEffect(() => {
     setSeen((s) => ({ ...s, [current]: shown.length }));
@@ -80,7 +82,7 @@ export function Chat({ view, messages, say }: Props) {
         {shown.length === 0 && <p className="muted empty">No messages yet.</p>}
         {shown.map((m) => (
           <div key={m.id} className={`msg ${m.from === view.me ? 'mine' : ''} ${m.from === 'system' ? 'system' : ''}`}>
-            {m.from !== 'system' && <span className="who">{m.name}</span>}
+            {m.from !== 'system' && <span className="who" style={ids[m.from] && { color: ids[m.from].color }}>{m.name}</span>}
             <span className="text">{m.text}</span>
           </div>
         ))}
