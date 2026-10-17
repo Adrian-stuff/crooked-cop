@@ -112,12 +112,15 @@ const activePolice = (g: GameState) =>
   g.players.filter((p) => (p.role === 'police' || p.role === 'traitor') && p.status === 'active');
 const isPolice = (p: Player) => p.role === 'police' || p.role === 'traitor';
 
+// Station names like "Taft Ave." would otherwise end sentences with "..".
+const tidy = (text: string) => text.replace(/\.\.(?=\s|$)/g, '.');
+
 function log(g: GameState, kind: LogEntry['kind'], text: string) {
-  g.log.push({ id: g.nextId++, round: g.round, kind, text });
+  g.log.push({ id: g.nextId++, round: g.round, kind, text: tidy(text) });
 }
 
 function envelope(g: GameState, to: string, kind: Envelope['kind'], title: string, lines: string[]) {
-  g.envelopes.push({ id: `e${g.nextId++}`, to, round: g.round, kind, title, lines });
+  g.envelopes.push({ id: `e${g.nextId++}`, to, round: g.round, kind, title, lines: lines.map(tidy) });
 }
 
 function plural(n: number, word: string) {

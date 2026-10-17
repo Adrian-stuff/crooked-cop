@@ -31,7 +31,7 @@ function saveSession(s: Session | null) {
 
 export type ConnState = 'connecting' | 'open' | 'closed';
 
-export function useGame() {
+export function useGame(): Game {
   const [conn, setConn] = useState<ConnState>('connecting');
   const [view, setView] = useState<View | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
@@ -111,11 +111,28 @@ export function useGame() {
     conn, view, chat, error, clearError: () => setError(null), clockOffset, resuming,
     create: (name: string) => send({ t: 'create', name }),
     join: (code: string, name: string) => send({ t: 'join', code, name }),
-    leave: () => send({ t: 'leave' }),
+    leave: () => {
+      send({ t: 'leave' });
+      history.replaceState(null, '', location.pathname);
+    },
     kick: (playerId: string) => send({ t: 'kick', playerId }),
     say: (channel: string, text: string) => send({ t: 'chat', channel, text }),
     act,
   };
 }
 
-export type Game = ReturnType<typeof useGame>;
+export interface Game {
+  conn: ConnState;
+  view: View | null;
+  chat: ChatMessage[];
+  error: string | null;
+  clearError: () => void;
+  clockOffset: number;
+  resuming: boolean;
+  create: (name: string) => void;
+  join: (code: string, name: string) => void;
+  leave: () => void;
+  kick: (playerId: string) => void;
+  say: (channel: string, text: string) => void;
+  act: (action: Action) => void;
+}

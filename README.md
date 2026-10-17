@@ -79,13 +79,44 @@ numbers can be changed in the lobby.
 - **Station names**: the unlabeled Green-line stop between 5th Ave. and Abad Santos is named *R. Papa*. Duplicate
   names (Ortigas, Carriedo, Tandang Sora) show their line in envelopes and logs.
 
-## Next: Supabase backend
+## Online play (Supabase)
 
-The dev server keeps games in memory (a server restart ends them). The planned production backend on
-Supabase:
+The online backend runs on the Supabase project **crooked-cop** (`hxoubdwmvrecptxzrzzp`). It is already deployed.
 
-- `cc_rooms` (full state, service role only), `cc_views` (one row per player, readable only by that player
-  through RLS, streamed with Realtime), `cc_messages` (RLS by channel membership).
-- An edge function `game` that runs `shared/engine.ts`: load state → apply action → save → write views.
-- Anonymous sign-in for players (it must be enabled under Authentication → Providers in the Supabase
-  dashboard).
+- `cc_rooms` holds the full game state and `cc_messages` holds chat. Both have RLS enabled with no policies, so
+  only the service role can touch them. Browsers can't read either table.
+- The `game` edge function (`supabase/functions/game/index.ts`) runs the same `shared/engine.ts`: load room →
+  apply action → save (with optimistic locking on `version`) → broadcast each player their own view.
+- Each player gets a secret token. Their view and chat arrive on a Realtime broadcast topic named after that
+  token, so nobody else can listen in. Players don't need an account.
+- Phase timers advance when a client notices a deadline has passed and calls `tick`. The engine ignores
+  repeats.
+
+```bash
+npm run dev:online
+```
+
+starts the client against Supabase.
+
+```bash
+npm run build
+```
+
+produces a static site in `dist/` that plays online with no extra settings (the Supabase URL and publishable key are
+built in, see `src/net/config.ts`). Host it anywhere: Vercel, Netlify, GitHub Pages.
+
+```bash
+npm run bots:online -- ABCD 3
+```
+
+sends bots into an online room.
+
+After changing anything in `shared/`, redeploy the function. This copies the engine into the function folder
+first:
+
+```bash
+npm run deploy:fn
+```
+
+Not done yet: old rooms are never deleted (a scheduled cleanup of rooms idle for over a day would fix it), and
+online lobbies don't detect closed tabs (the host can remove ghosts).

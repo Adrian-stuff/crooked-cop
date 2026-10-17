@@ -1,11 +1,15 @@
 import { useEffect } from 'react';
 import { useGame } from './net/useGame';
+import { USE_SUPABASE } from './net/config';
+import { useSupabaseGame } from './net/useSupabaseGame';
 import { GameScreen } from './screens/GameScreen';
 import { Home } from './screens/Home';
 import { Lobby } from './screens/Lobby';
 
+const useBackend = USE_SUPABASE ? useSupabaseGame : useGame;
+
 export default function App() {
-  const game = useGame();
+  const game = useBackend();
   const { error, clearError } = game;
 
   useEffect(() => {

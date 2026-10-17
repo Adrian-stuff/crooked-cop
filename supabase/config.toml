@@ -1,0 +1,5 @@
+project_id = "crooked-cop"
+
+# The game function does its own auth with per-player secret tokens.
+[functions.game]
+verify_jwt = false

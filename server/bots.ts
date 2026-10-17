@@ -15,18 +15,54 @@ const URL = process.env.GAME_URL ?? 'ws://localhost:8787';
 const NAMES = ['Bot Dela Cruz', 'Bot Santos', 'Bot Reyes', 'Bot Bautista', 'Bot Garcia', 'Bot Mendoza', 'Bot Ramos'];
 const rnd = <T>(a: T[]) => a[Math.floor(Math.random() * a.length)];
 
-function bot(name: string) {
+// Online mode (BOTS_ONLINE=1) talks to the Supabase edge function and polls for its view.
+const FN_URL = process.env.SUPABASE_FN_URL ?? 'https://hxoubdwmvrecptxzrzzp.supabase.co/functions/v1/game';
+const FN_KEY = process.env.SUPABASE_KEY ?? 'sb_publishable_gC2G4XKMyYm2OvOZiazl1A_6S0U-3_5';
+
+async function fn(body: Record<string, unknown>) {
+  const res = await fetch(FN_URL, { method: 'POST', headers: { apikey: FN_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? res.statusText);
+  return data;
+}
+
+function connect(name: string, onView: (v: View, send: (m: ClientMsg) => void) => void) {
+  if (process.env.BOTS_ONLINE) {
+    let session: { code: string; token: string } | null = null;
+    const send = (m: ClientMsg) => {
+      if (m.t === 'action' && session) fn({ op: 'action', ...session, action: m.action }).catch((e) => console.log(`[${name}] ${e.message}`));
+    };
+    fn({ op: 'join', code: code.toUpperCase(), name }).then((j) => {
+      session = { code: j.code, token: j.token };
+      onView(j.view, send);
+      setInterval(async () => {
+        try {
+          const r = await fn({ op: 'resume', ...session! });
+          const v: View = r.view;
+          if (v.deadline && Date.now() > v.deadline + 1500) await fn({ op: 'tick', ...session! });
+          onView(v, send);
+        } catch (e) {
+          console.log(`[${name}] ${(e as Error).message}`);
+        }
+      }, 1500);
+    }).catch((e) => console.log(`[${name}] ${e.message}`));
+    return;
+  }
   const ws = new WebSocket(URL);
   const send = (m: ClientMsg) => ws.send(JSON.stringify(m));
-  let busy = false;
-  let lastKey = '';
-
   ws.on('open', () => send({ t: 'join', code: code.toUpperCase(), name }));
   ws.on('message', (data) => {
     const msg: ServerMsg = JSON.parse(String(data));
     if (msg.t === 'error') console.log(`[${name}] ${msg.message}`);
-    if (msg.t !== 'view') return;
-    const v = msg.view;
+    if (msg.t === 'view') onView(msg.view, send);
+  });
+  ws.on('close', () => console.log(`[${name}] disconnected`));
+}
+
+function bot(name: string) {
+  let busy = false;
+  let lastKey = '';
+  connect(name, (v, send) => {
     const me = v.players.find((p) => p.id === v.me)!;
     const key = `${v.phase}:${v.round}:${me.done}:${me.moved}:${me.acted}:${me.station}:${v.accusation?.target ?? ''}`;
     if (busy || key === lastKey) return;
@@ -37,7 +73,6 @@ function bot(name: string) {
       play(v, send);
     }, 600 + Math.random() * 1200);
   });
-  ws.on('close', () => console.log(`[${name}] disconnected`));
 }
 
 function play(v: View, send: (m: ClientMsg) => void) {
@@ -71,4 +106,4 @@ function play(v: View, send: (m: ClientMsg) => void) {
 
 const n = Math.max(1, Math.min(7, Number(countArg ?? 3)));
 for (let i = 0; i < n; i++) setTimeout(() => bot(NAMES[i]), i * 150);
-console.log(`Sending ${n} bots to room ${code.toUpperCase()}…`);
+console.log(`Sending ${n} ${process.env.BOTS_ONLINE ? 'online ' : ''}bots to room ${code.toUpperCase()}…`);

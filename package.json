@@ -11,9 +11,13 @@
     "test": "vitest run",
     "lint": "eslint .",
     "preview": "vite preview",
-    "bots": "tsx server/bots.ts"
+    "bots": "tsx server/bots.ts",
+    "dev:online": "VITE_BACKEND=supabase vite --host",
+    "deploy:fn": "node scripts/sync-function.mjs && supabase functions deploy game --project-ref hxoubdwmvrecptxzrzzp --no-verify-jwt --use-api",
+    "bots:online": "BOTS_ONLINE=1 tsx server/bots.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "ws": "^8.18.0"
