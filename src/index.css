@@ -130,9 +130,20 @@ input, select {
 }
 .splash { font-family: var(--display); font-size: 22px; }
 .home-card { width: min(440px, 100%); text-align: center; }
-.home-logo { width: 190px; border-radius: 14px; box-shadow: 0 20px 50px #0008; transform: rotate(-3deg); }
-.home h1 { font-size: 44px; margin-top: 18px; color: var(--cream); }
-.tagline { font-family: var(--type); color: var(--gold); font-size: 15px; }
+.home { grid-template-rows: 1fr auto; gap: 28px; }
+.home-card { align-self: center; }
+.home-logo {
+  width: min(260px, 70vw);
+  height: auto;
+  filter: drop-shadow(0 18px 40px #d4a24c40) drop-shadow(0 6px 14px #000c);
+  animation: logo-in 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+@keyframes logo-in { from { opacity: 0; transform: scale(0.85) rotate(-8deg); } }
+@media (prefers-reduced-motion: reduce) { .home-logo { animation: none; } }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.tagline { font-family: var(--type); color: var(--gold); font-size: 16px; margin-top: 6px; }
+.credits { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.team-logo { width: 120px; height: auto; }
 .intro { margin-bottom: 22px; }
 .home .field { text-align: left; }
 .home-actions { display: flex; flex-direction: column; gap: 12px; }

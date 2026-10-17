@@ -21,7 +21,7 @@ export function TopBar({ view, offset, onLeave }: { view: View; offset: number; 
   return (
     <header className="topbar">
       <div className="brand">
-        <img src="/assets/artifact.png" alt="" width={34} height={34} />
+        <img src="/assets/logo-crooked-cop-128.png" alt="" width={36} height={36} />
         <span>The Crooked Cop</span>
       </div>
       <div className="room">Room <strong>{view.code}</strong></div>

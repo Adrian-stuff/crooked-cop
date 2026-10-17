@@ -86,7 +86,7 @@ export function Board({ view, marks = {}, onStation, showTrails }: Props) {
         </radialGradient>
       </defs>
       <rect x={-PAD} width={MAP_WIDTH + PAD * 2} height={MAP_HEIGHT} fill="var(--board)" />
-      <image href="/assets/logo-diamond.png" x={660} y={240} width={600} height={600} opacity={0.05} preserveAspectRatio="xMidYMid meet" />
+      <image href="/assets/logo-crooked-cop.png" x={690} y={250} width={580} height={580} opacity={0.07} preserveAspectRatio="xMidYMid meet" />
       <StaticMap />
 
       {trails && Object.entries(trails).map(([pid, steps]) => {

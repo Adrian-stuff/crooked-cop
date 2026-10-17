@@ -12,8 +12,8 @@ export function Home({ game }: { game: Game }) {
   return (
     <main className="home">
       <div className="home-card">
-        <img src="/assets/card-back.png" alt="The Crooked Cop" className="home-logo" />
-        <h1>The Crooked Cop</h1>
+        <img src="/assets/logo-crooked-cop.png" alt="" className="home-logo" width={560} height={560} />
+        <h1 className="visually-hidden">The Crooked Cop</h1>
         <p className="tagline">He swore to protect. He chose to betray.</p>
         <p className="muted intro">
           A hidden-role chase for 4 to 8 players. One or two Heisters race across the rail network for Artifacts while the
@@ -39,6 +39,11 @@ export function Home({ game }: { game: Game }) {
         </div>
         {game.conn !== 'open' && <p className="muted small">Connecting to the server…</p>}
       </div>
+      <footer className="credits">
+        <span className="muted small">A game by</span>
+        <img src="/assets/logo-out-of-track.png" alt="Out of Track" className="team-logo" width={480} height={427} />
+        <span className="muted small">BSIT 3-8</span>
+      </footer>
     </main>
   );
 }
