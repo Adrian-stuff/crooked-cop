@@ -3,6 +3,7 @@ import { stationLabel } from '../../shared/map';
 import type { PublicPlayer, View } from '../../shared/types';
 import { ART } from '../game/art';
 import { SPECTATOR_IDENTITY, tokenText, type Identity } from '../game/identity';
+import { actsThisPhase } from '../game/selection';
 import { TokenIcon } from './Token';
 
 export function useCountdown(deadline: number | null, offset: number) {
@@ -18,9 +19,7 @@ const PHASE_NAME: Record<string, string> = {
   lobby: 'Lobby', setup: 'Setup', heister: 'Heister Phase', police: 'Police Phase', info: 'Information Phase', ended: 'Case closed',
 };
 
-export function TopBar({ view, offset, onLeave }: { view: View; offset: number; onLeave: () => void }) {
-  const secs = useCountdown(view.deadline, offset);
-  const mm = secs === null ? '' : `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+export function TopBar({ view, onLeave }: { view: View; onLeave: () => void }) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -31,8 +30,6 @@ export function TopBar({ view, offset, onLeave }: { view: View; offset: number; 
       {view.phase !== 'lobby' && (
         <>
           <div className="round">Round <strong key={view.round} className="pop">{Math.max(view.round, 0)}</strong>/{view.settings.maxRounds}</div>
-          <div key={view.phase} className={`phase phase-${view.phase}`}>{PHASE_NAME[view.phase]}</div>
-          {secs !== null && <div className={`timer ${secs <= 10 ? 'urgent' : ''}`} aria-live="off">{mm}</div>}
           <div className="taken" title="Artifacts taken, as announced after each Heister Phase">
             <img src="/assets/artifact.png" alt="" width={22} height={22} /> <span key={view.announcedTaken} className="pop">{view.announcedTaken}</span>/{view.settings.artifactCount} taken
           </div>
@@ -53,12 +50,31 @@ function roleBadge(p: PublicPlayer) {
   }
 }
 
-function actsThisPhase(phase: View['phase'], p: PublicPlayer) {
-  if (p.status !== 'active' || p.role === 'spectator') return false;
-  const officer = p.role === 'police' || p.role === 'traitor';
-  if (phase === 'heister') return p.role === 'heister';
-  if (phase === 'police') return officer && !p.skipsPolice;
-  return phase === 'info';
+// Sits on top of the board: what phase it is, how long is left, and who the table is waiting on.
+export function StatusStrip({ view, offset, ids }: { view: View; offset: number; ids: Record<string, Identity> }) {
+  const secs = useCountdown(view.deadline, offset);
+  const mm = secs === null ? '' : `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+  const waiting = view.players.filter((p) => actsThisPhase(view.phase, p) && !p.done);
+  const mine = waiting.some((p) => p.id === view.me);
+  return (
+    <div className="status-strip">
+      <span key={view.phase} className={`phase phase-${view.phase}`}>{PHASE_NAME[view.phase]}</span>
+      {secs !== null && view.phase !== 'ended' && <span className={`timer ${secs <= 10 ? 'urgent' : ''}`} aria-live="off">{mm}</span>}
+      {waiting.length > 0 && (
+        <span className="waiting">
+          <span className="muted">{mine ? 'Your move ·' : 'Waiting on'}</span>
+          {waiting.map((p) => (
+            <span key={p.id} className={`waiting-token ${p.id === view.me ? 'me' : ''}`} title={p.name}>
+              <TokenIcon role={p.role} identity={ids[p.id] ?? SPECTATOR_IDENTITY} text={tokenText(p)} size={24} />
+            </span>
+          ))}
+        </span>
+      )}
+      {waiting.length === 0 && (view.phase === 'heister' || view.phase === 'police' || view.phase === 'info') && (
+        <span className="waiting muted">Everyone is done</span>
+      )}
+    </div>
+  );
 }
 
 interface PlayerListProps {

@@ -27,7 +27,7 @@ export function Lobby({ game, view }: { game: Game; view: View }) {
 
   return (
     <div className="app lobby-screen">
-      <TopBar view={view} offset={game.clockOffset} onLeave={game.leave} />
+      <TopBar view={view} onLeave={game.leave} />
       <main className="lobby">
         <section className="panel lobby-main">
           <div className="code-hero">

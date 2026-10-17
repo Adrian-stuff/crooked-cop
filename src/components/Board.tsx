@@ -2,10 +2,10 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'rea
 import { LINES, MAP_HEIGHT, MAP_WIDTH, STATIONS, STATION_BY_ID, linesAt, lineName, type LabelSide } from '../../shared/map';
 import type { PublicPlayer, View } from '../../shared/types';
 import { SPECTATOR_IDENTITY, seatIdentities, tokenText, type Identity } from '../game/identity';
+import { BOARD_PAD as PAD } from '../game/geometry';
 import { trackPoints } from '../game/route';
 import { TokenShape } from './Token';
 
-const PAD = 50; // room for labels at the map edges
 
 export type Mark = 'candidate' | 'path' | 'search' | 'arrest' | 'start';
 
@@ -17,6 +17,8 @@ interface Props {
   showNames?: boolean;
   focus?: string | null; // player id to spotlight
   onFocus?: (id: string | null) => void;
+  onPick?: (id: string | null) => void; // a station clicked outside any mode (null: empty board)
+  selected?: string | null;
 }
 
 const LABEL_OFFSET: Record<LabelSide, [number, number, 'start' | 'middle' | 'end']> = {
@@ -171,7 +173,7 @@ function ArtifactLayer({ artifacts }: { artifacts: Record<string, number> | null
   );
 }
 
-export function Board({ view, marks = {}, onStation, showTrails, showNames = true, focus = null, onFocus }: Props) {
+export function Board({ view, marks = {}, onStation, showTrails, showNames = true, focus = null, onFocus, onPick, selected = null }: Props) {
   const ids = useMemo(() => seatIdentities(view?.players ?? []), [view?.players]);
 
   // Pawns in player order (yours last, so it draws on top), fanned out around shared stations.
@@ -210,7 +212,7 @@ export function Board({ view, marks = {}, onStation, showTrails, showNames = tru
           <stop offset="100%" stopColor="#000" stopOpacity="0.3" />
         </radialGradient>
       </defs>
-      <rect x={-PAD} width={MAP_WIDTH + PAD * 2} height={MAP_HEIGHT} fill="var(--board)" />
+      <rect x={-PAD} width={MAP_WIDTH + PAD * 2} height={MAP_HEIGHT} fill="var(--board)" onClick={() => onPick?.(null)} />
       <image href="/assets/logo-crooked-cop.png" x={690} y={250} width={580} height={580} opacity={0.07} preserveAspectRatio="xMidYMid meet" />
       <StaticMap />
 
@@ -229,12 +231,13 @@ export function Board({ view, marks = {}, onStation, showTrails, showNames = tru
       {STATIONS.map((st) => {
         const mark = marks[st.id];
         const [dx, dy, anchor] = LABEL_OFFSET[st.label];
-        const clickable = !!onStation && !!mark;
+        const clickable = (!!onStation && !!mark) || !!onPick;
         const occ = occupants[st.id]?.join(', ');
         return (
           <g key={st.id} className={`station ${mark ? `mark-${mark}` : ''} ${clickable ? 'clickable' : ''}`}
-            onClick={() => onStation && mark && onStation(st.id)}>
+            onClick={() => (mark ? onStation?.(st.id) : onPick?.(st.id))}>
             {mark && <circle key={mark} cx={st.x} cy={st.y} r={31} className="mark-ring" />}
+            {selected === st.id && <circle cx={st.x} cy={st.y} r={36} className="selected-ring" />}
             {st.exit && <circle cx={st.x} cy={st.y} r={30} fill="none" stroke="#f7e11b" strokeWidth={8} className="exit-ring" />}
             {st.interchange ? (
               <>
@@ -258,8 +261,8 @@ export function Board({ view, marks = {}, onStation, showTrails, showNames = tru
       {pawns.map(({ p, station, crowded, x, y }) => (
         <Pawn key={p.id} p={p} identity={ids[p.id] ?? SPECTATOR_IDENTITY} x={x} y={y} station={station}
           me={p.id === view?.me} focused={spot === p.id} dimmed={!!spot && spot !== p.id}
-          showTag={showNames && !crowded} clickable={!!onStation && !!marks[station]}
-          onClick={() => onStation && marks[station] && onStation(station)} onHover={hover} />
+          showTag={showNames && !crowded} clickable={(!!onStation && !!marks[station]) || !!onPick}
+          onClick={() => (marks[station] ? onStation?.(station) : onPick?.(station))} onHover={hover} />
       ))}
 
       <rect x={-PAD} width={MAP_WIDTH + PAD * 2} height={MAP_HEIGHT} fill="url(#vignette)" pointerEvents="none" />

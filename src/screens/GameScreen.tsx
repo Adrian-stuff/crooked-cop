@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { View } from '../../shared/types';
-import { ActionPanel } from '../components/ActionPanel';
+import { ActionDock } from '../components/ActionDock';
 import { Board } from '../components/Board';
 import { Chat } from '../components/Chat';
-import { Envelopes, Log, PhaseBanner, PlayerList, RoleReveal, TopBar } from '../components/Panels';
+import { Envelopes, Log, PhaseBanner, PlayerList, RoleReveal, StatusStrip, TopBar } from '../components/Panels';
+import { StationPopover } from '../components/StationPopover';
 import { TokenIcon } from '../components/Token';
 import { SPECTATOR_IDENTITY, seatIdentities } from '../game/identity';
 import { marksFor, type Mode } from '../game/selection';
@@ -16,12 +17,14 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
   const [showTrails, setShowTrails] = useState(true);
   const [showNames, setShowNames] = useState(true);
   const [focus, setFocus] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
   const ids = useMemo(() => seatIdentities(view.players), [view.players]);
 
   // Reset any half-built selection when the phase changes.
   useEffect(() => {
     setMode(null);
     setPath([]);
+    setPicked(null);
   }, [view.phase, view.round]);
 
   useEffect(() => {
@@ -48,13 +51,20 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
 
   return (
     <div className="app game-screen">
-      <TopBar view={view} offset={game.clockOffset} onLeave={game.leave} />
+      <TopBar view={view} onLeave={game.leave} />
       <main className="game">
         <div className="board-col">
           <div className="board-wrap">
+            <StatusStrip view={view} offset={game.clockOffset} ids={ids} />
             <div className="board-scroll">
-              <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails}
-                showNames={showNames} focus={focus} onFocus={setFocus} />
+              <div className="board-stage">
+                <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails}
+                  showNames={showNames} focus={focus} onFocus={setFocus} selected={picked}
+                  onPick={(id) => setPicked(mode || id === picked ? null : id)} />
+                {picked && !mode && (
+                  <StationPopover view={view} station={picked} ids={ids} act={game.act} onClose={() => setPicked(null)} />
+                )}
+              </div>
             </div>
             <div className="legend">
               <span><i className="lg station" /> Station</span>
@@ -74,13 +84,13 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
               )}
             </div>
           </div>
+          <ActionDock key={view.phase} view={view} mode={mode} path={path} setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={game.act} />
           <div className="below-board">
             <PlayerList view={view} ids={ids} focus={focus} setFocus={setFocus} />
             <Log view={view} />
           </div>
         </div>
         <aside className="side-col">
-          <ActionPanel key={view.phase} view={view} mode={mode} path={path} setMode={setMode} setPath={setPath} act={game.act} />
           <Envelopes view={view} />
           <Chat view={view} messages={game.chat} say={game.say} />
         </aside>

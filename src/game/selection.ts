@@ -1,5 +1,5 @@
 import { ADJ, EXIT_STATION, STATIONS, distance, neighbours } from '../../shared/map';
-import type { View } from '../../shared/types';
+import type { PublicPlayer, View } from '../../shared/types';
 import type { Mark } from '../components/Board';
 
 export type Mode = 'move' | 'express' | 'search' | 'arrest' | 'start' | null;
@@ -51,4 +51,40 @@ export function marksFor(view: View, mode: Mode, path: string[]): Record<string,
   for (const id of candidates(view, mode, path)) marks[id] = kind;
   for (const id of path) marks[id] = 'path';
   return marks;
+}
+
+// The best legal route to `target` in one move. Heisters prefer routes that sweep up Artifacts,
+// then the shortest one.
+export function pathTo(view: View, mode: 'move' | 'express', target: string): string[] | null {
+  let best: string[] | null = null;
+  let bestScore = -1;
+  const walk = (path: string[]) => {
+    for (const st of candidates(view, mode, path)) {
+      const next = [...path, st];
+      if (st !== target) {
+        walk(next);
+        continue;
+      }
+      // Express only collects at its last stop, so the stops in between don't count.
+      const stops = mode === 'express' ? [st] : next;
+      const score = stops.filter((s) => (view.artifacts?.[s] ?? 0) > 0).length;
+      if (!best || score > bestScore || (score === bestScore && next.length < best.length)) {
+        best = next;
+        bestScore = score;
+      }
+    }
+  };
+  walk([]);
+  return best;
+}
+
+export const canTarget = (view: View, mode: 'start' | 'search' | 'arrest', id: string) => candidates(view, mode, []).includes(id);
+
+// Whether this player still has something to do in the current phase.
+export function actsThisPhase(phase: View['phase'], p: PublicPlayer) {
+  if (p.status !== 'active' || p.role === 'spectator') return false;
+  const officer = p.role === 'police' || p.role === 'traitor';
+  if (phase === 'heister') return p.role === 'heister';
+  if (phase === 'police') return officer && !p.skipsPolice;
+  return phase === 'info';
 }
