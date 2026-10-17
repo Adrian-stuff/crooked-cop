@@ -1,0 +1,38 @@
+{
+  "name": "crooked-cop",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c red,blue \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:web": "vite --host",
+    "dev:server": "tsx watch server/dev-server.ts",
+    "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "bots": "tsx server/bots.ts"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.25.0",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@types/ws": "^8.5.12",
+    "@vitejs/plugin-react": "^4.4.1",
+    "concurrently": "^9.1.0",
+    "eslint": "^9.25.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.19",
+    "globals": "^16.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.30.1",
+    "vite": "^6.3.5",
+    "vitest": "^2.1.8"
+  }
+}

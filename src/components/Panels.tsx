@@ -1,0 +1,159 @@
+import { useEffect, useState } from 'react';
+import { stationLabel } from '../../shared/map';
+import type { PublicPlayer, View } from '../../shared/types';
+
+export function useCountdown(deadline: number | null, offset: number) {
+  const [now, setNow] = useState(() => Date.now() + offset);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now() + offset), 250);
+    return () => clearInterval(id);
+  }, [offset]);
+  return deadline ? Math.max(0, Math.ceil((deadline - now) / 1000)) : null;
+}
+
+const PHASE_NAME: Record<string, string> = {
+  lobby: 'Lobby', setup: 'Setup', heister: 'Heister Phase', police: 'Police Phase', info: 'Information Phase', ended: 'Case closed',
+};
+
+export function TopBar({ view, offset, onLeave }: { view: View; offset: number; onLeave: () => void }) {
+  const secs = useCountdown(view.deadline, offset);
+  const mm = secs === null ? '' : `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+  return (
+    <header className="topbar">
+      <div className="brand">
+        <img src="/assets/artifact.png" alt="" width={34} height={34} />
+        <span>The Crooked Cop</span>
+      </div>
+      <div className="room">Room <strong>{view.code}</strong></div>
+      {view.phase !== 'lobby' && (
+        <>
+          <div className="round">Round <strong>{Math.max(view.round, 0)}</strong>/{view.settings.maxRounds}</div>
+          <div className={`phase phase-${view.phase}`}>{PHASE_NAME[view.phase]}</div>
+          {secs !== null && <div className={`timer ${secs <= 10 ? 'urgent' : ''}`} aria-live="off">{mm}</div>}
+          <div className="taken" title="Artifacts taken, as announced after each Heister Phase">
+            <img src="/assets/artifact.png" alt="" width={22} height={22} /> {view.announcedTaken}/{view.settings.artifactCount} taken
+          </div>
+        </>
+      )}
+      <button className="btn ghost small leave" onClick={onLeave}>Leave</button>
+    </header>
+  );
+}
+
+function roleBadge(p: PublicPlayer) {
+  switch (p.role) {
+    case 'heister': return <span className="tag heister">{p.label} Heister</span>;
+    case 'traitor': return <span className="tag traitor">Crooked Cop</span>;
+    case 'police': return <span className="tag police">Police</span>;
+    case 'spectator': return <span className="tag">Spectator</span>;
+    default: return null;
+  }
+}
+
+function actsThisPhase(phase: View['phase'], p: PublicPlayer) {
+  if (p.status !== 'active' || p.role === 'spectator') return false;
+  const officer = p.role === 'police' || p.role === 'traitor';
+  if (phase === 'heister') return p.role === 'heister';
+  if (phase === 'police') return officer && !p.skipsPolice;
+  return phase === 'info';
+}
+
+export function PlayerList({ view }: { view: View }) {
+  const order = { heister: 0, traitor: 1, police: 1, unknown: 2, spectator: 3 } as const;
+  const players = [...view.players].sort((a, b) => order[a.role] - order[b.role]);
+  return (
+    <section className="panel players">
+      <h3>Players</h3>
+      <ul>
+        {players.map((p) => (
+          <li key={p.id} className={`${p.connected ? '' : 'offline'} ${p.status !== 'active' ? 'out' : ''}`}>
+            <span className="pname">{p.name}{p.id === view.me && <em> (you)</em>}{p.isHost && <span title="Host"> ★</span>}</span>
+            {roleBadge(p)}
+            <span className="pmeta">
+              {p.station ? stationLabel(p.station) : p.role === 'heister' && p.status === 'active' ? 'Location unknown' : ''}
+              {p.carried !== null && p.role === 'heister' ? ` · ${p.carried} carried` : ''}
+              {p.status !== 'active' && ` · ${p.status}`}
+              {p.skipsPolice && ' · sitting out'}
+              {p.cannotArrest && ' · no arrests'}
+              {!p.connected && ' · offline'}
+            </span>
+            {actsThisPhase(view.phase, p) && (
+              <span className={`ready ${p.done ? 'yes' : ''}`} title={p.done ? 'Done' : 'Thinking'}>{p.done ? '✓' : '…'}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+export function Envelopes({ view }: { view: View }) {
+  const list = [...view.envelopes].reverse();
+  if (view.phase === 'lobby') return null;
+  return (
+    <section className="panel envelopes">
+      <h3>{view.godView ? 'All envelopes' : 'Your envelopes'}</h3>
+      {list.length === 0 && <p className="muted">Search a station to receive a sealed envelope. Its contents are private to you.</p>}
+      <div className="env-list">
+        {list.map((e, i) => (
+          <article key={e.id} className={`envelope ${e.kind} ${i === 0 ? 'newest' : ''}`}>
+            <header>
+              <span>{e.title}</span>
+              <span className="env-round">R{e.round}{view.godView ? ` · ${view.players.find((p) => p.id === e.to)?.name}` : ''}</span>
+            </header>
+            <ul>{e.lines.map((l, j) => <li key={j}>{l}</li>)}</ul>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export function Log({ view }: { view: View }) {
+  const entries = [...view.log].reverse();
+  return (
+    <section className="panel log">
+      <h3>Dispatch log</h3>
+      <ul>
+        {entries.map((e) => (
+          <li key={e.id} className={`log-${e.kind}`}><span className="log-round">R{e.round}</span> {e.text}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+const ROLE_COPY = {
+  heister: {
+    img: '/assets/role-heister.png',
+    title: 'You are a Heister',
+    body: 'Everyone knows who you are, but not where you are. Grab at least 5 Artifacts and escape through Central Terminal before round 15.',
+  },
+  traitor: {
+    img: '/assets/role-crooked.png',
+    title: 'You are the Crooked Cop',
+    body: "Act like a loyal officer. After each turn you'll get a tip-off with the Heisters' exact locations. Feed the team believable lies and don't get voted out.",
+  },
+  police: {
+    img: '/assets/role-cop.png',
+    title: 'You are a Cop',
+    body: 'Track the Heisters with searches and clues, arrest both of them, and watch out: one of your fellow officers is lying to you.',
+  },
+} as const;
+
+export function RoleReveal({ view, onClose }: { view: View; onClose: () => void }) {
+  if (view.myRole === 'spectator') return null;
+  const copy = ROLE_COPY[view.myRole];
+  const partner = view.myRole === 'heister' ? view.players.find((p) => p.role === 'heister' && p.id !== view.me) : null;
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className={`modal role-card ${view.myRole}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={copy.title}>
+        <img src={copy.img} alt="" className="role-img" />
+        <h2>{copy.title}</h2>
+        <p>{copy.body}</p>
+        {partner && <p>Your partner is <strong>{partner.name}</strong> ({partner.label}). Use the Heisters chat.</p>}
+        <button className="btn primary" onClick={onClose} autoFocus>Got it</button>
+      </div>
+    </div>
+  );
+}
