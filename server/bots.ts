@@ -62,15 +62,18 @@ function connect(name: string, onView: (v: View, send: (m: ClientMsg) => void) =
 function bot(name: string) {
   let busy = false;
   let lastKey = '';
+  let latest: View;
   connect(name, (v, send) => {
+    latest = v;
     const me = v.players.find((p) => p.id === v.me)!;
-    const key = `${v.phase}:${v.round}:${me.done}:${me.moved}:${me.acted}:${me.station}:${v.accusation?.target ?? ''}`;
-    if (busy || key === lastKey) return;
+    const key = `${v.phase}:${v.round}:${me.done}:${me.moved}:${me.acted}:${me.station}:${v.accusation?.target ?? ''}:${v.policeTurn}`;
+    if (key === lastKey) return;
     lastKey = key;
+    if (busy) return; // the pending move below plays whatever view is newest by then
     busy = true;
     setTimeout(() => {
       busy = false;
-      play(v, send);
+      play(latest, send);
     }, 600 + Math.random() * 1200);
   });
 }
@@ -81,22 +84,22 @@ function play(v: View, send: (m: ClientMsg) => void) {
   if (me.status !== 'active' || v.myRole === 'spectator') return;
   const officer = v.myRole === 'police' || v.myRole === 'traitor';
 
-  if (v.phase === 'setup' && !me.station) {
-    act({ type: 'chooseStart', station: rnd(STATIONS.filter((s) => !s.exit)).id });
+  if (v.phase === 'setup' && !me.done) {
+    if (!me.station) act({ type: 'chooseStart', station: rnd(STATIONS.filter((s) => !s.exit)).id });
+    else act({ type: 'ready' });
   } else if (v.phase === 'heister' && v.myRole === 'heister' && !me.done && me.station) {
     const step1 = rnd(neighbours(me.station));
     const step2 = rnd(neighbours(step1).filter((s) => s !== me.station));
     act({ type: 'move', path: Math.random() < 0.5 && step2 ? [step1, step2] : [step1], express: false });
-  } else if (v.phase === 'police' && officer && !me.done && me.station) {
-    if (!me.moved) {
-      const dest = rnd(neighbours(me.station).filter((s) => s !== EXIT_STATION || !v.exitMustClear));
-      act({ type: 'move', path: [dest], express: false });
-    } else if (!me.acted) {
-      if (Math.random() < 0.15 && !me.cannotArrest && v.arrestsLeft > 0) {
-        act({ type: 'arrest', station: rnd(ADJ[me.station].map((n) => n.to).filter((s) => s !== EXIT_STATION)) });
-      } else {
-        act({ type: 'search', station: me.station });
-      }
+  } else if (v.phase === 'police' && officer && !me.done && me.station && v.policeTurn === me.id) {
+    // One action per turn: sometimes arrest, otherwise search a neighbour (which moves there) or just move.
+    const near = neighbours(me.station).filter((s) => s !== EXIT_STATION || !v.exitMustClear);
+    if (Math.random() < 0.15 && !me.cannotArrest && v.arrestsLeft > 0) {
+      act({ type: 'arrest', station: rnd(ADJ[me.station].map((n) => n.to).filter((s) => s !== EXIT_STATION)) });
+    } else if (Math.random() < 0.6 && v.settings.searchRange > 0) {
+      act({ type: 'search', station: rnd(near) });
+    } else {
+      act({ type: 'move', path: [rnd(near)], express: false });
     }
   } else if (v.phase === 'info') {
     if (v.accusation && officer && v.accusation.votes[me.id] === undefined) act({ type: 'vote', yes: Math.random() < 0.5 });

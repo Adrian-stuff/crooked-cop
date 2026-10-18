@@ -63,6 +63,7 @@ interface PawnProps {
   y: number;
   station: string;
   me: boolean;
+  onTurn: boolean;
   focused: boolean;
   dimmed: boolean;
   showTag: boolean;
@@ -71,7 +72,7 @@ interface PawnProps {
   onHover: (id: string | null) => void;
 }
 
-function Pawn({ p, identity, x, y, station, me, focused, dimmed, showTag, clickable, onClick, onHover }: PawnProps) {
+function Pawn({ p, identity, x, y, station, me, onTurn, focused, dimmed, showTag, clickable, onClick, onHover }: PawnProps) {
   const ref = useRef<SVGGElement>(null);
   const last = useRef<{ x: number; y: number; station: string } | null>(null);
 
@@ -100,10 +101,11 @@ function Pawn({ p, identity, x, y, station, me, focused, dimmed, showTag, clicka
   const tagW = name.length * 10.5 + 24;
   return (
     <g ref={ref} style={{ transform: `translate(${x}px, ${y}px)` }}
-      className={`pawn ${me ? 'me' : ''} ${focused ? 'focused' : ''} ${dimmed ? 'dim' : ''} ${p.status} ${clickable ? 'clickable' : ''}`}
+      className={`pawn ${me ? 'me' : ''} ${onTurn ? 'on-turn' : ''} ${focused ? 'focused' : ''} ${dimmed ? 'dim' : ''} ${p.status} ${clickable ? 'clickable' : ''}`}
       onMouseEnter={() => onHover(p.id)} onMouseLeave={() => onHover(null)} onClick={onClick}>
       <g className="pawn-body">
         <g transform="scale(1.2)">
+          {onTurn && <circle r={46} className="turn-ring" />}
           {me && <circle r={42} className="me-halo" />}
           <TokenShape role={p.role} identity={identity} text={tokenText(p)} />
           {heister && p.carried !== null && p.carried > 0 && (
@@ -128,6 +130,31 @@ function Pawn({ p, identity, x, y, station, me, focused, dimmed, showTag, clicka
         </g>
       )}
       <title>{`${p.name} · ${identity.name}${heister ? ` · ${p.label} Heister` : ''}${p.status !== 'active' ? ` · ${p.status}` : ''}`}</title>
+    </g>
+  );
+}
+
+// The Crooked Cop's last tip-off, drawn in red where each hidden Heister was at that moment.
+function TipoffLayer({ view, shown }: { view: View; shown: Set<string> }) {
+  if (!view.tipoff) return null;
+  return (
+    <g pointerEvents="none">
+      {Object.entries(view.tipoff.at).map(([hid, station]) => {
+        const h = view.players.find((p) => p.id === hid);
+        if (!station || !h || shown.has(hid)) return null;
+        const st = STATION_BY_ID[station];
+        return (
+          <g key={`${hid}-${view.tipoff!.round}-${station}`} className="tipoff" transform={`translate(${st.x - 40} ${st.y + 34})`}>
+            <path d="M0 -30 L30 0 L0 30 L-30 0 Z" className="tipoff-diamond" />
+            <text y={8} textAnchor="middle" className="tipoff-label">{h.label}</text>
+            <g transform="translate(0 46)">
+              <rect x={-38} y={-13} width={76} height={24} rx={12} className="tipoff-tag" />
+              <text y={5} textAnchor="middle" className="tipoff-tag-text">Tip R{view.tipoff!.round}</text>
+            </g>
+            <title>{`${h.label} (${h.name}) was here at your tip-off in round ${view.tipoff!.round}`}</title>
+          </g>
+        );
+      })}
     </g>
   );
 }
@@ -257,10 +284,11 @@ export function Board({ view, marks = {}, onStation, showTrails, showNames = tru
       })}
 
       <ArtifactLayer artifacts={view?.artifacts ?? null} />
+      {view && <TipoffLayer view={view} shown={new Set(pawns.map((d) => d.p.id))} />}
 
       {pawns.map(({ p, station, crowded, x, y }) => (
         <Pawn key={p.id} p={p} identity={ids[p.id] ?? SPECTATOR_IDENTITY} x={x} y={y} station={station}
-          me={p.id === view?.me} focused={spot === p.id} dimmed={!!spot && spot !== p.id}
+          me={p.id === view?.me} onTurn={view?.phase === 'police' && view.policeTurn === p.id} focused={spot === p.id} dimmed={!!spot && spot !== p.id}
           showTag={showNames && !crowded} clickable={(!!onStation && !!marks[station]) || !!onPick}
           onClick={() => (marks[station] ? onStation?.(station) : onPick?.(station))} onHover={hover} />
       ))}

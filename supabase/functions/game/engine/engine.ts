@@ -54,6 +54,7 @@ export function createGame(code: string, hostId: string, hostName: string, seed:
     players: [blankPlayer(hostId, hostName, true)], artifacts: {}, announcedTaken: 0, visits: [],
     pickups: [], arrestsThisRound: 0, exitStreak: 0, exitMustClear: false, accusation: null,
     accusationUsed: false, envelopes: [], log: [], winner: null, endReason: null, trails: {}, nextId: 1,
+    policeTurn: null, reveal: null, tipoff: null,
   };
 }
 
@@ -177,7 +178,7 @@ function startGame(g: GameState, t: number) {
     if (p.wantsSpectate) p.role = 'spectator';
     Object.assign(p, {
       status: 'active', station: null, carried: 0, done: false, moved: false, acted: null,
-      envelopeGiven: false, skipPoliceRound: undefined, noArrestRound: undefined,
+      envelopeGiven: false, skipPoliceRound: undefined, noArrestRound: undefined, cleared: false,
     });
   }
   const candidates = STATIONS.filter((s) => !s.exit).map((s) => s.id);
@@ -186,15 +187,16 @@ function startGame(g: GameState, t: number) {
   Object.assign(g, {
     round: 0, visits: [], pickups: [], arrestsThisRound: 0, exitStreak: 0, exitMustClear: false,
     accusation: null, accusationUsed: false, envelopes: [], log: [], winner: null, endReason: null,
-    trails: {}, announcedTaken: 0,
+    trails: {}, announcedTaken: 0, policeTurn: null, reveal: null, tipoff: null,
   });
   g.phase = 'setup';
   g.deadline = t + g.settings.setupSeconds * 1000;
   const heisterNames = g.players.filter((p) => p.role === 'heister').map(heisterTag).join(' and ');
   log(g, 'announce', `The heist is on. ${heisterNames} ${nHeisters > 1 ? 'are' : 'is'} the Heister${nHeisters > 1 ? 's' : ''}. One officer is crooked.`);
-  log(g, 'info', 'Setup: Police pick their starting stations openly, and Heisters pick theirs in secret.');
+  log(g, 'info', 'Setup: everyone picks a starting station and can change it until they lock in. Only the Police team sees officer picks, and Heisters pick in secret.');
 }
 
+// Applies a starting station once setup is over (picks before that are just choices).
 function placeAt(g: GameState, p: Player, station: string) {
   p.station = station;
   if (p.role === 'heister') {
@@ -216,9 +218,14 @@ function collect(g: GameState, p: Player, station: string) {
 function finishSetup(g: GameState, t: number) {
   const free = STATIONS.filter((s) => !s.exit).map((s) => s.id);
   for (const p of g.players) {
-    if (p.role === 'spectator' || p.station) continue;
-    placeAt(g, p, pick(g, free));
-    if (isPolice(p)) log(g, 'info', `${p.name} was placed at ${stationLabel(p.station!)}.`);
+    if (p.role === 'spectator') continue;
+    if (!p.station) p.autoPlaced = true;
+    placeAt(g, p, p.station ?? pick(g, free));
+  }
+  // Officer picks stay hidden from the Heisters until now, so announce them all at once.
+  for (const p of g.players.filter(isPolice)) {
+    log(g, 'info', `${p.name} ${p.autoPlaced ? 'was placed' : 'starts'} at ${stationLabel(p.station!)}.`);
+    delete p.autoPlaced;
   }
   beginRound(g, 1, t);
 }
@@ -243,7 +250,7 @@ function endHeisterPhase(g: GameState, t: number) {
   g.announcedTaken = taken;
   log(g, 'announce', `${plural(taken, 'Artifact')} of ${g.settings.artifactCount} ${taken === 1 ? 'has' : 'have'} been taken.`);
   g.phase = 'police';
-  g.deadline = t + g.settings.policeSeconds * 1000;
+  g.policeTurn = null;
   g.arrestsThisRound = 0;
   for (const p of g.players) {
     p.moved = false;
@@ -254,7 +261,7 @@ function endHeisterPhase(g: GameState, t: number) {
     if (isPolice(p) && p.status === 'active' && skipping) log(g, 'info', `${p.name} sits out this Police Phase (wrong arrest).`);
   }
   if (g.exitMustClear) log(g, 'info', `Exit rule: ${stationLabel(EXIT_STATION)} must be empty of officers at the end of this round.`);
-  log(g, 'info', 'Police Phase: officers move, then Search or Arrest.');
+  log(g, 'info', 'Police Phase: officers take turns, one action each: Move, Express, Search or Arrest.');
   maybeEndPolicePhase(g, t);
 }
 
@@ -271,16 +278,28 @@ function finishPoliceTurn(g: GameState, p: Player) {
           : `${heisterTag(h)} is ${h.status}.`,
       );
     envelope(g, p.id, 'traitor', 'Crooked tip-off', lines);
+    g.tipoff = {
+      round: g.round,
+      at: Object.fromEntries(g.players.filter((h) => h.role === 'heister').map((h) => [h.id, h.status === 'active' ? h.station : null])),
+    };
   }
 }
 
+// Officers act one at a time in seat order. Hands the turn on once the current officer is done,
+// and ends the phase when nobody is left.
 function maybeEndPolicePhase(g: GameState, t: number) {
   if (g.phase !== 'police') return;
-  if (activePolice(g).every((p) => p.done)) endPolicePhase(g, t);
+  const current = g.players.find((p) => p.id === g.policeTurn);
+  if (current && !current.done && current.status === 'active') return;
+  const next = activePolice(g).find((p) => !p.done);
+  if (!next) return endPolicePhase(g, t);
+  g.policeTurn = next.id;
+  g.deadline = t + g.settings.policeSeconds * 1000;
 }
 
 function endPolicePhase(g: GameState, t: number) {
   for (const p of activePolice(g)) finishPoliceTurn(g, p);
+  g.policeTurn = null;
   if (g.exitMustClear) {
     for (const p of activePolice(g)) {
       if (p.station === EXIT_STATION) {
@@ -437,12 +456,10 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
     case 'chooseStart': {
       if (g.phase !== 'setup') fail('Starting stations are chosen during setup.');
       if (me.role === 'spectator') fail('Spectators do not take a station.');
-      if (me.station) fail('You already chose a starting station.');
+      if (me.done) fail('You already locked in your starting station.');
       if (!ADJ[action.station]) fail('Unknown station.');
       if (me.role === 'heister' && action.station === EXIT_STATION) fail('Heisters cannot start on the Exit Station.');
-      placeAt(g, me, action.station);
-      if (isPolice(me)) log(g, 'info', `${me.name} starts at ${stationLabel(action.station)}.`);
-      if (g.players.every((p) => p.role === 'spectator' || p.station)) finishSetup(g, t);
+      me.station = action.station;
       break;
     }
 
@@ -469,12 +486,14 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
       } else if (g.phase === 'police') {
         if (!isPolice(me)) fail('It is the Police Phase.');
         if (me.done) fail('Your turn is over.');
-        if (me.moved) fail('You already moved this round.');
+        if (g.policeTurn !== me.id) fail('Wait for your turn.');
+        if (me.moved || me.acted) fail('You already used your action this round.');
         validatePath(me.station!, action.path, action.express);
         me.station = action.path[action.path.length - 1];
         me.moved = true;
         log(g, 'info', `${me.name} ${action.express ? 'took the Express' : 'moved'} to ${stationLabel(me.station)}.`);
-        if (me.acted) finishPoliceTurn(g, me);
+        // One action per officer per round: moving uses it.
+        finishPoliceTurn(g, me);
         maybeEndPolicePhase(g, t);
       } else fail('You cannot move right now.');
       break;
@@ -483,15 +502,19 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
     case 'search': {
       if (g.phase !== 'police' || !isPolice(me)) fail('Only officers can search during the Police Phase.');
       if (me.status !== 'active' || me.done) fail('Your turn is over.');
-      if (me.acted) fail('You already used your action this round.');
+      if (g.policeTurn !== me.id) fail('Wait for your turn.');
+      if (me.acted || me.moved) fail('You already used your action this round.');
       if (!ADJ[action.station]) fail('Unknown station.');
       if (distance(me.station!, action.station) > g.settings.searchRange) {
         fail(g.settings.searchRange === 0 ? 'You can only search your own station.' : `You can only search within ${plural(g.settings.searchRange, 'stop')} of you.`);
       }
       me.acted = 'search';
       envelope(g, me.id, 'search', `Search: ${stationLabel(action.station)}`, searchReport(g, action.station));
-      log(g, 'info', `${me.name} searched ${stationLabel(action.station)}.`);
-      if (me.moved) finishPoliceTurn(g, me);
+      // Searching takes the officer to the station they searched.
+      const went = me.station !== action.station;
+      me.station = action.station;
+      log(g, 'info', went ? `${me.name} went to ${stationLabel(action.station)} and searched it.` : `${me.name} searched ${stationLabel(action.station)}.`);
+      finishPoliceTurn(g, me);
       maybeEndPolicePhase(g, t);
       break;
     }
@@ -499,7 +522,8 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
     case 'arrest': {
       if (g.phase !== 'police' || !isPolice(me)) fail('Only officers can arrest during the Police Phase.');
       if (me.status !== 'active' || me.done) fail('Your turn is over.');
-      if (me.acted) fail('You already used your action this round.');
+      if (g.policeTurn !== me.id) fail('Wait for your turn.');
+      if (me.acted || me.moved) fail('You already used your action this round.');
       if (me.noArrestRound === g.round) fail('You were wrongly accused and cannot arrest this round.');
       if (g.arrestsThisRound >= 3) fail('The team has used all 3 arrest attempts this round.');
       const target = action.station;
@@ -526,7 +550,7 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
         me.skipPoliceRound = g.round + 1;
         log(g, 'fail', `${me.name}'s arrest at ${stationLabel(target)} failed. The station was empty. ${me.name} skips next Police Phase.`);
       }
-      if (me.moved) finishPoliceTurn(g, me);
+      finishPoliceTurn(g, me);
       maybeEndPolicePhase(g, t);
       break;
     }
@@ -541,6 +565,7 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
         if (activeHeisters(g).every((p) => p.done)) endHeisterPhase(g, t);
       } else if (g.phase === 'police') {
         if (!isPolice(me) || me.status !== 'active') fail('It is the Police Phase.');
+        if (g.policeTurn !== me.id) fail('Wait for your turn.');
         finishPoliceTurn(g, me);
         maybeEndPolicePhase(g, t);
       } else fail('Nothing to end right now.');
@@ -572,6 +597,13 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
     }
 
     case 'ready': {
+      if (g.phase === 'setup') {
+        if (me.role === 'spectator') fail('Spectators do not take a station.');
+        if (!me.station) fail('Pick a starting station first.');
+        me.done = true;
+        if (g.players.every((p) => p.role === 'spectator' || p.done)) finishSetup(g, t);
+        break;
+      }
       if (g.phase !== 'info') fail('You can only skip ahead during the Information Phase.');
       me.done = true;
       maybeEndInfoPhase(g, t);
@@ -594,6 +626,8 @@ function resolveAccusation(g: GameState, t: number, timedOut: boolean) {
   const target = g.players.find((p) => p.id === acc.target)!;
   if (yes >= needed) {
     g.accusation = null;
+    g.reveal = { id: g.nextId++, round: g.round, target: target.id, guilty: target.role === 'traitor' };
+    if (target.role !== 'traitor') target.cleared = true;
     if (target.role === 'traitor') {
       target.status = 'exposed';
       log(g, 'expose', `Vote passed ${yes}-${no}. ${target.name} WAS the Crooked Cop and is removed from the game.`);
@@ -625,9 +659,14 @@ export function advanceTime(g: GameState, t: number) {
         }
         endHeisterPhase(g, t);
         break;
-      case 'police':
-        endPolicePhase(g, t);
+      case 'police': {
+        // The current officer ran out of time; the next one gets a fresh timer.
+        const current = g.players.find((p) => p.id === g.policeTurn);
+        if (current) finishPoliceTurn(g, current);
+        else endPolicePhase(g, t);
+        maybeEndPolicePhase(g, t);
         break;
+      }
       case 'info':
         if (g.accusation) resolveAccusation(g, t, true);
         if (g.phase === 'info') beginRound(g, g.round + 1, t);
@@ -659,16 +698,19 @@ export function viewFor(g: GameState, viewerId: string, t: number): View {
     if (g.phase === 'lobby') role = p.wantsSpectate ? 'spectator' : 'unknown';
     else if (p.role === 'traitor' && !(godView || p.id === viewerId || p.status === 'exposed')) role = 'police';
     const seeHeister = p.role !== 'heister' || godView || heisterTeam || p.status !== 'active';
+    // During setup only the Police team sees where officers chose to start.
+    const seeOfficer = !(g.phase === 'setup' && isPolice(p)) || godView || p.id === viewerId || myRole === 'police' || myRole === 'traitor';
     return {
       id: p.id, name: p.name, isHost: p.isHost, connected: p.connected, wantsSpectate: p.wantsSpectate,
       role, label: p.label, status: p.status,
-      station: seeHeister ? p.station : null,
+      station: seeHeister && seeOfficer ? p.station : null,
       carried: p.role === 'heister' ? (godView || heisterTeam ? p.carried : null) : null,
       done: p.done,
       skipsPolice: p.skipPoliceRound === g.round,
       cannotArrest: p.noArrestRound === g.round,
       moved: p.moved,
       acted: p.acted,
+      cleared: !!p.cleared,
     };
   });
 
@@ -691,5 +733,8 @@ export function viewFor(g: GameState, viewerId: string, t: number): View {
       : heisterTeam
         ? Object.fromEntries(Object.entries(g.trails).filter(([id]) => g.players.find((p) => p.id === id)?.role === 'heister'))
         : null,
+    policeTurn: g.policeTurn ?? null,
+    reveal: g.reveal ?? null,
+    tipoff: myRole === 'traitor' ? g.tipoff ?? null : null,
   };
 }

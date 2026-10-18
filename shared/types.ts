@@ -19,7 +19,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   setupSeconds: 60,
   heisterSeconds: 60,
-  policeSeconds: 60,
+  policeSeconds: 45, // per officer: the Police Phase is taken one officer at a time
   infoSeconds: 60,
   maxRounds: 15,
   artifactCount: 10,
@@ -46,6 +46,8 @@ export interface Player {
   moved: boolean;
   acted: 'search' | 'arrest' | null;
   envelopeGiven: boolean;
+  autoPlaced?: boolean; // placed at random when setup timed out
+  cleared?: boolean; // voted on and shown not to be the Crooked Cop
 }
 
 export interface Envelope {
@@ -68,6 +70,20 @@ export interface Accusation {
   by: string;
   target: string;
   votes: Record<string, boolean>;
+}
+
+// Shown to everyone when an accusation vote passes.
+export interface Reveal {
+  id: number;
+  round: number;
+  target: string;
+  guilty: boolean;
+}
+
+// Heister positions as of the Crooked Cop's latest tip-off (null: no longer active).
+export interface Tipoff {
+  round: number;
+  at: Record<string, string | null>;
 }
 
 export interface Visit {
@@ -99,6 +115,9 @@ export interface GameState {
   endReason: string | null;
   trails: Record<string, { round: number; station: string }[]>;
   nextId: number;
+  policeTurn: string | null; // the officer acting now in the Police Phase
+  reveal: Reveal | null; // result of the latest passed accusation vote
+  tipoff: Tipoff | null; // where the Heisters were at the Crooked Cop's latest tip-off
 }
 
 export type Action =
@@ -132,6 +151,7 @@ export interface PublicPlayer {
   cannotArrest: boolean;
   moved: boolean;
   acted: 'search' | 'arrest' | null;
+  cleared: boolean;
 }
 
 export interface View {
@@ -158,6 +178,9 @@ export interface View {
   winner: 'heisters' | 'police' | null;
   endReason: string | null;
   trails: Record<string, { round: number; station: string }[]> | null;
+  policeTurn: string | null;
+  reveal: Reveal | null;
+  tipoff: Tipoff | null; // only for the Crooked Cop
 }
 
 export type ChatChannel = 'lobby' | 'police' | 'heisters' | `dm:${string}`;

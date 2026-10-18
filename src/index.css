@@ -305,7 +305,7 @@ input, select {
   flex-shrink: 0;
 }
 .envelope header { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; background: var(--navy); color: var(--cream); font-family: var(--display); font-size: 14px; }
-.envelope.traitor header { background: var(--green); }
+.envelope.traitor header { background: var(--red); }
 .envelope ul { margin: 0; padding: 8px 10px 10px 26px; }
 .envelope li { margin-bottom: 3px; }
 .envelope { animation: env-in 0.45s cubic-bezier(0.2, 1.2, 0.4, 1) backwards; transform-origin: top center; }
@@ -452,6 +452,11 @@ input, select {
 .waiting-token { border-radius: 50%; animation: pawn-pop 0.3s cubic-bezier(0.2, 1.5, 0.4, 1) backwards; }
 .waiting-token.me { box-shadow: 0 0 0 2px var(--gold); }
 
+.waiting-token.current { box-shadow: 0 0 0 2px var(--search); }
+.waiting-token.queued { opacity: 0.55; }
+.turn-ring { fill: none; stroke: var(--search); stroke-width: 5; animation: turn-pulse 1.4s ease-out infinite; }
+@keyframes turn-pulse { from { transform: scale(0.85); opacity: 1; } to { transform: scale(1.35); opacity: 0; } }
+
 /* ---------- Action dock ---------- */
 .board-stage { position: relative; min-width: 760px; }
 .board-stage .board { min-width: 0; }
@@ -525,3 +530,29 @@ input, select {
 .choice.arrest { border-color: #6b2a2a; }
 .choice.arrest span { color: #ff7b7b; }
 .pop-none { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+
+/* ---------- Vote reveal ---------- */
+.tag.cleared { background: #2d4a36; color: #b9f0c8; margin-left: 6px; vertical-align: 1px; }
+.reveal-card { position: fixed; inset: 0; z-index: 48; display: grid; place-items: center; padding: 16px; background: #000a; cursor: pointer; animation: fade-in 0.3s ease-out; perspective: 1200px; }
+.reveal-inner {
+  width: min(420px, 100%); text-align: center; background: var(--cream); color: #2b2418; border-radius: 16px; padding: 22px 22px 18px;
+  box-shadow: 0 30px 80px #000; position: relative; animation: card-flip 0.8s cubic-bezier(0.2, 1.1, 0.3, 1) backwards;
+}
+.reveal-inner .token-icon { margin: 4px auto 12px; }
+.reveal-inner h2 { font-size: 24px; color: #1a1d24; margin-bottom: 6px; }
+.reveal-inner p { font-size: 14px; margin: 0; }
+.reveal-stamp {
+  position: absolute; top: 26px; right: 14px; transform: rotate(12deg); font-family: var(--display); font-size: 30px; letter-spacing: 0.08em;
+  text-transform: uppercase; padding: 2px 12px; border: 4px solid currentColor; border-radius: 8px; background: #f2e8d5cc;
+  animation: stamp 0.5s 0.7s cubic-bezier(0.2, 1.3, 0.4, 1) backwards;
+}
+.reveal-card.guilty .reveal-stamp { color: var(--green); }
+.reveal-card.innocent .reveal-stamp { color: var(--red); }
+
+/* ---------- Crooked Cop tip-off markers ---------- */
+.tipoff { animation: pawn-pop 0.4s cubic-bezier(0.2, 1.5, 0.4, 1) backwards; }
+.tipoff-diamond { fill: #ff3b3b33; stroke: #ff4d4d; stroke-width: 4; stroke-dasharray: 8 5; animation: march 1.2s linear infinite; }
+.tipoff-label { font-family: var(--display); font-size: 22px; fill: #ff6b6b; }
+.tipoff-tag { fill: #2a0d0de6; stroke: #ff4d4d; stroke-width: 2; }
+.tipoff-tag-text { font-family: var(--display); font-size: 15px; fill: #ffb3b3; }
+.tip-meta { color: #ff7b7b; }

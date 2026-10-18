@@ -61,14 +61,18 @@ portraits, and phase-banner backgrounds. Any slot left `null` keeps the vector f
 Where the GDD was ambiguous these are the choices made (agreed in planning or picked as defaults). All the
 numbers can be changed in the lobby.
 
-- **Round**: Heister Phase (60s) → Police Phase (60s) → Information Phase (60s), 15 rounds. A phase ends early
-  once everyone in it is done.
-- **Police turn**: optionally move (1–2 stations, or Express up to 4 on one line), plus **one** Search or
-  Arrest. The team has 3 arrests per round. Officers act at the same time, not in turn order.
+- **Setup**: everyone picks a starting station and can change it freely until they press **Lock in**. Setup ends
+  when everyone has locked in or the timer runs out (anyone without a pick is placed at random). Officers see
+  each other's picks; Heisters only see officer starts once setup ends. Heisters can't start on the Exit.
+- **Round**: Heister Phase (60s) → Police Phase (45s per officer) → Information Phase (60s), 15 rounds. A phase
+  ends early once everyone in it is done.
+- **Police turn**: officers go **one at a time** in seat order, each with their own timer. Each officer takes
+  **one** action: Move (1–2 stations), Express (up to 4 on one line), Search or Arrest, or passes. The team has
+  3 arrests per round.
 - **Staying put**: moving is optional for everyone ("Stay put" / just end your turn).
 - **Express**: must stay on a single line and picks up an Artifact only at its final stop. A normal move picks
   up Artifacts at every station it passes.
-- **Search**: your station or one stop away (lobby setting). The envelope says whether a Heister is there right
+- **Search**: your station or one stop away (lobby setting), and the officer **goes to** the searched station. The envelope says whether a Heister is there right
   now, whether one passed through in the last 2 rounds, and any Artifact found or taken there, plus a random
   **field clue** ("a Heister is on the Pink line", "H2 is NOT within 3 stops of Bocaue", "H1 is carrying 2
   Artifacts", and so on).

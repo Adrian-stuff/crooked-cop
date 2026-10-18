@@ -29,12 +29,13 @@ function choices(view: View, id: string): Choice[] {
   const officer = view.myRole === 'police' || view.myRole === 'traitor';
   const out: Choice[] = [];
 
-  if (view.phase === 'setup' && !me.station && canTarget(view, 'start', id)) {
-    out.push({ key: 'start', label: 'Start here', kind: 'primary', action: { type: 'chooseStart', station: id } });
+  if (view.phase === 'setup' && !me.done && me.station !== id && canTarget(view, 'start', id)) {
+    out.push({ key: 'start', label: me.station ? 'Start here instead' : 'Start here', kind: 'primary', action: { type: 'chooseStart', station: id } });
   }
+  const myTurn = view.phase !== 'police' || view.policeTurn === me.id;
 
   const canMove = me.station && me.station !== id && !me.done
-    && ((view.phase === 'heister' && view.myRole === 'heister') || (view.phase === 'police' && officer && !me.moved));
+    && ((view.phase === 'heister' && view.myRole === 'heister') || (view.phase === 'police' && officer && myTurn && !me.moved && !me.acted));
   if (canMove) {
     const walk = pathTo(view, 'move', id);
     const express = walk ? null : pathTo(view, 'express', id);
@@ -51,9 +52,9 @@ function choices(view: View, id: string): Choice[] {
     }
   }
 
-  if (view.phase === 'police' && officer && !me.done && !me.acted) {
+  if (view.phase === 'police' && officer && myTurn && !me.done && !me.acted && !me.moved) {
     if (canTarget(view, 'search', id)) {
-      out.push({ key: 'search', label: 'Search here', note: 'Sealed envelope with what you find', kind: 'search', action: { type: 'search', station: id } });
+      out.push({ key: 'search', label: 'Search here', note: me.station === id ? 'Sealed envelope with what you find' : 'Go there and open a sealed envelope', kind: 'search', action: { type: 'search', station: id } });
     }
     if (canTarget(view, 'arrest', id) && !me.cannotArrest && view.arrestsLeft > 0) {
       out.push({ key: 'arrest', label: 'Arrest here', note: `Wrong arrest: you sit out next round · ${view.arrestsLeft} left`, kind: 'arrest', action: { type: 'arrest', station: id } });
@@ -125,7 +126,9 @@ function noneReason(view: View): string {
   if (!me || view.myRole === 'spectator' || me.status !== 'active') return 'You are watching this case.';
   if (me.done) return 'Your turn is done for this phase.';
   const officer = view.myRole === 'police' || view.myRole === 'traitor';
+  if (view.phase === 'police' && officer && view.policeTurn !== me.id) return 'Wait for your turn.';
   if (view.phase === 'police' && officer) return 'Out of reach this turn.';
+  if (view.phase === 'setup') return 'You start here.';
   if (view.phase === 'heister' && view.myRole === 'heister') return 'Out of reach this turn.';
   return 'Nothing to do here this phase.';
 }

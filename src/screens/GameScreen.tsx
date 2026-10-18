@@ -3,7 +3,7 @@ import type { View } from '../../shared/types';
 import { ActionDock } from '../components/ActionDock';
 import { Board } from '../components/Board';
 import { Chat } from '../components/Chat';
-import { Envelopes, Log, PhaseBanner, PlayerList, RoleReveal, StatusStrip, TopBar } from '../components/Panels';
+import { Envelopes, Log, PhaseBanner, PlayerList, RevealCard, RoleReveal, StatusStrip, TopBar } from '../components/Panels';
 import { StationPopover } from '../components/StationPopover';
 import { TokenIcon } from '../components/Token';
 import { SPECTATOR_IDENTITY, seatIdentities } from '../game/identity';
@@ -96,6 +96,7 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
         </aside>
       </main>
       <PhaseBanner view={view} />
+      <RevealCard view={view} />
       {showRole && <RoleReveal view={view} onClose={() => setShowRole(false)} />}
     </div>
   );

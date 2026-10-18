@@ -86,5 +86,5 @@ export function actsThisPhase(phase: View['phase'], p: PublicPlayer) {
   const officer = p.role === 'police' || p.role === 'traitor';
   if (phase === 'heister') return p.role === 'heister';
   if (phase === 'police') return officer && !p.skipsPolice;
-  return phase === 'info';
+  return phase === 'info' || phase === 'setup';
 }

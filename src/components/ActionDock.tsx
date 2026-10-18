@@ -18,7 +18,7 @@ const HINT: Partial<Record<NonNullable<Mode>, string>> = {
   start: 'Click any station to start there',
   move: 'Pick up to 2 stops on the map',
   express: 'Ride one line, up to 4 stops',
-  search: 'Click a blue-ringed station to search it',
+  search: "Click a blue-ringed station: you'll go there and search it",
   arrest: "Click a red-ringed station. A wrong arrest costs you next round's Police Phase",
 };
 
@@ -87,7 +87,7 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
   const moveCards = (step?: string, done?: boolean) => (
     <>
       <Card step={step} label="Move 1–2" kind="move" selected={mode === 'move'} done={done} onClick={() => pick('move')} />
-      <Card step={step && 'or'} label="Express" icon="/assets/card-express.png" kind="express" selected={mode === 'express'} done={done}
+      <Card step={step && !done ? 'or' : undefined} label="Express" icon="/assets/card-express.png" kind="express" selected={mode === 'express'} done={done}
         title="Up to 4 stops along one line" onClick={() => pick('express')} />
     </>
   );
@@ -116,10 +116,20 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
   }
 
   if (view.phase === 'setup') {
-    if (me.station) return <Dock title="Starting station set" sub={<>You start at <strong>{stationLabel(me.station)}</strong>. Waiting for the others…</>} />;
+    if (me.done) return <Dock title="Locked in" sub={<>You start at <strong>{stationLabel(me.station!)}</strong>. Waiting for the others…</>} />;
+    if (me.station) {
+      return (
+        <Dock title={<>Starting at {stationLabel(me.station)}</>} hint={hint ?? 'Click another station to change your pick'}
+          sub="Change it as often as you like until you lock in. Setup ends when everyone has locked in.">
+          <Card label="Change" selected={mode === 'start'} onClick={() => pick('start')} />
+          <button className="btn primary" onClick={() => { setMode(null); act({ type: 'ready' }); }}>Lock in</button>
+        </Dock>
+      );
+    }
     return (
       <Dock title="Choose your starting station" hint={hint}
-        sub={view.myRole === 'heister' ? 'Pick secretly. Gold coins mark the hidden Artifacts.' : 'Your pick is public. Spread out to cover the network.'}>
+        sub={view.myRole === 'heister' ? 'Pick secretly. Officer picks stay hidden until setup ends. Gold coins mark the Artifacts.'
+          : 'Your team sees your pick; the Heisters only see it when setup ends. Spread out to cover the network.'}>
         <Card label={mode === 'start' ? 'Click a station…' : 'Pick on the map'} kind="primary" selected={mode === 'start'} onClick={() => pick('start')} />
       </Dock>
     );
@@ -153,21 +163,23 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
     if (me.done) {
       return <Dock title="Police Phase" sub={me.skipsPolice ? 'You sit out this phase (wrong arrest last round).' : 'Your turn is done. Waiting for the other officers…'} />;
     }
+    if (view.policeTurn !== me.id) {
+      const up = view.players.find((p) => p.id === view.policeTurn);
+      return <Dock title="Police Phase" sub={<>Officers go one at a time. {up ? <><strong>{up.name}</strong> is taking their turn.</> : ''} You're up soon.</>} />;
+    }
     const noArrest = me.cannotArrest || view.arrestsLeft <= 0;
     const warn = view.exitMustClear ? `Exit rule: no officer may end this round on ${stationLabel(EXIT_STATION)}`
       : me.cannotArrest ? 'You were wrongly accused: no arrests for you this round' : null;
     return (
       <Dock title="Your turn, Officer" hint={hint ?? warn ?? 'Click any station for options'}
-        sub="Move (optional), then one Search or Arrest.">
+        sub="Pick one action: Move, Express, Search (you go there) or Arrest.">
         {routing ? route : (
           <>
-            {moveCards('Move', me.moved)}
-            <span className="dock-sep" aria-hidden="true" />
-            <Card step="Act" label="Search" kind="search" selected={mode === 'search'} done={!!me.acted && me.acted === 'search'}
-              disabled={!!me.acted} onClick={() => pick('search')} />
+            {moveCards()}
+            <Card label="Search" kind="search" selected={mode === 'search'} title="Go to a nearby station and search it" onClick={() => pick('search')} />
             <Card step={`${view.arrestsLeft} left`} label="Arrest" icon="/assets/card-arrest.png" kind="arrest" selected={mode === 'arrest'}
-              done={me.acted === 'arrest'} disabled={!!me.acted || noArrest} onClick={() => pick('arrest')} />
-            <button className="btn ghost" onClick={() => { setMode(null); act({ type: 'endTurn' }); }}>End turn</button>
+              disabled={noArrest} onClick={() => pick('arrest')} />
+            <button className="btn ghost" onClick={() => { setMode(null); act({ type: 'endTurn' }); }}>Pass</button>
           </>
         )}
       </Dock>

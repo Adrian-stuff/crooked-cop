@@ -68,7 +68,7 @@ export function Lobby({ game, view }: { game: Game; view: View }) {
           <h3>Rules {me.isHost ? '' : <span className="muted">(host sets these)</span>}</h3>
           {num('maxRounds', 'Rounds', 1, 50)}
           {num('heisterSeconds', 'Heister Phase', 10, 600, 'sec')}
-          {num('policeSeconds', 'Police Phase', 10, 600, 'sec')}
+          {num('policeSeconds', 'Each officer’s turn', 10, 600, 'sec')}
           {num('infoSeconds', 'Information Phase', 10, 600, 'sec')}
           {num('setupSeconds', 'Setup', 10, 600, 'sec')}
           {num('artifactCount', 'Artifacts hidden', 1, 30)}

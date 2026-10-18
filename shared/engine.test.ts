@@ -20,6 +20,7 @@ function placeAll(g: GameState, where: Record<string, string> = {}): GameState {
   for (const p of g.players) {
     g = act(g, p.id, { type: 'chooseStart', station: where[p.id] ?? fallback[i++] });
   }
+  for (const p of g.players) g = act(g, p.id, { type: 'ready' });
   return g;
 }
 
@@ -107,13 +108,13 @@ describe('game flow', () => {
     g = placeAll(g, { [h1.id]: 'lawton', [h2.id]: 'quirino', [cops[0].id]: 'senate_deped', [cops[1].id]: 'pier_4' });
     g = act(g, h1.id, { type: 'move', path: ['recto'], express: false });
     g = act(g, h2.id, { type: 'endTurn' });
-    // cops[1] at pier_4 arrests divisoria (empty) -> penalty
-    g = act(g, cops[1].id, { type: 'arrest', station: 'divisoria' });
-    expect(g.players.find((p) => p.id === cops[1].id)!.skipPoliceRound).toBe(2);
     // cops[0] at senate_deped arrests recto (adjacent) -> catches h1 with 3 artifacts
     g = act(g, cops[0].id, { type: 'arrest', station: 'recto' });
     expect(g.players.find((p) => p.id === h1.id)!.status).toBe('arrested');
     expect(g.artifacts.recto).toBe(3);
+    // cops[1] at pier_4 arrests divisoria (empty) -> penalty
+    g = act(g, cops[1].id, { type: 'arrest', station: 'divisoria' });
+    expect(g.players.find((p) => p.id === cops[1].id)!.skipPoliceRound).toBe(2);
     expect(g.arrestsThisRound).toBe(2);
     expect(g.phase).toBe('police');
   });
@@ -124,7 +125,9 @@ describe('game flow', () => {
     const cops = g.players.filter((p) => p.role === 'police' || p.role === 'traitor');
     g = placeAll(g, Object.fromEntries([...hs.map((h) => [h.id, 'quirino']), ...cops.map((c) => [c.id, 'pureza'])]));
     for (const h of hs) g = act(g, h.id, { type: 'endTurn' });
-    for (let i = 0; i < 3; i++) g = act(g, cops[i].id, { type: 'arrest', station: 'legarda' });
+    for (let i = 0; i < 3; i++) {
+      g = act(g, cops[i].id, { type: 'arrest', station: 'legarda' });
+    }
     expect(() => act(g, cops[3].id, { type: 'arrest', station: 'legarda' })).toThrow(/3 arrest/);
   });
 
@@ -154,11 +157,15 @@ describe('game flow', () => {
     g = placeAll(g);
     for (const h of byRole(g, 'heister')) g = act(g, h.id, { type: 'endTurn' });
     const at = (id: string) => g.players.find((p) => p.id === id)!.station!;
-    g = act(g, traitor.id, { type: 'search', station: at(traitor.id) });
-    g = act(g, traitor.id, { type: 'endTurn' });
+    // Officers take turns in seat order; the traitor and one cop search, the rest pass.
+    while (g.phase === 'police') {
+      const id = g.policeTurn!;
+      g = act(g, id, id === traitor.id || id === cop.id ? { type: 'search', station: at(id) } : { type: 'endTurn' });
+    }
     const tv = viewFor(g, traitor.id, T0);
     expect(tv.envelopes.some((e) => e.kind === 'traitor' && e.lines.length === 2)).toBe(true);
-    g = act(g, cop.id, { type: 'search', station: at(cop.id) });
+    for (const h of byRole(g, 'heister')) expect(tv.tipoff!.at[h.id]).toBe(at(h.id));
+    expect(viewFor(g, cop.id, T0).tipoff).toBeNull();
     const cv = viewFor(g, cop.id, T0);
     expect(cv.envelopes).toHaveLength(1);
     expect(cv.envelopes[0].lines.at(-1)).toMatch(/^Field clue:/);
@@ -171,21 +178,25 @@ describe('game flow', () => {
     const cops = byRole(g, 'police');
     g = placeAll(g);
     for (const h of byRole(g, 'heister')) g = act(g, h.id, { type: 'endTurn' });
-    g = act(g, traitor.id, { type: 'tick' }, T0 + 61_000);
-    expect(g.phase).toBe('info');
-    g = act(g, cops[0].id, { type: 'accuse', target: cops[1].id }, T0 + 61_000);
-    g = act(g, cops[2].id, { type: 'vote', yes: true }, T0 + 61_000);
-    g = act(g, traitor.id, { type: 'vote', yes: true }, T0 + 61_000);
+    // Let every officer's turn time out until the Information Phase of `round`.
+    let t = T0;
+    const untilInfo = (round: number) => {
+      while (!(g.phase === 'info' && g.round === round)) g = act(g, traitor.id, { type: 'tick' }, (t += 61_000));
+    };
+    untilInfo(1);
+    g = act(g, cops[0].id, { type: 'accuse', target: cops[1].id }, t);
+    g = act(g, cops[2].id, { type: 'vote', yes: true }, t);
+    g = act(g, traitor.id, { type: 'vote', yes: true }, t);
     expect(g.players.find((p) => p.id === cops[1].id)!.noArrestRound).toBe(2);
+    expect(viewFor(g, traitor.id, t).reveal).toMatchObject({ target: cops[1].id, guilty: false });
+    expect(viewFor(g, traitor.id, t).players.find((p) => p.id === cops[1].id)!.cleared).toBe(true);
     // Next round: correct accusation
-    g = act(g, traitor.id, { type: 'tick' }, T0 + 200_000);
-    g = act(g, traitor.id, { type: 'tick' }, T0 + 400_000);
-    g = act(g, traitor.id, { type: 'tick' }, T0 + 600_000);
-    expect(g.phase).toBe('info');
-    g = act(g, cops[0].id, { type: 'accuse', target: traitor.id }, T0 + 600_000);
-    g = act(g, cops[1].id, { type: 'vote', yes: true }, T0 + 600_000);
-    g = act(g, cops[2].id, { type: 'vote', yes: true }, T0 + 600_000);
+    untilInfo(2);
+    g = act(g, cops[0].id, { type: 'accuse', target: traitor.id }, t);
+    g = act(g, cops[1].id, { type: 'vote', yes: true }, t);
+    g = act(g, cops[2].id, { type: 'vote', yes: true }, t);
     expect(g.players.find((p) => p.id === traitor.id)!.status).toBe('exposed');
+    expect(viewFor(g, cops[0].id, t).reveal).toMatchObject({ target: traitor.id, guilty: true });
   });
 
   it('police win after the last round', () => {
@@ -211,5 +222,87 @@ describe('game flow', () => {
       g = act(g, 'p0', { type: 'tick' }, t);
     }
     expect(g.players.find((p) => p.id === cop.id)!.station).not.toBe(EXIT_STATION);
+  });
+});
+
+describe('setup secrecy', () => {
+  it('hides officer starts from Heisters until setup ends, then logs them', () => {
+    let g = setup(6);
+    const [cop, mate] = g.players.filter((p) => p.role === 'police' || p.role === 'traitor');
+    const heister = byRole(g, 'heister')[0];
+    g = act(g, cop.id, { type: 'chooseStart', station: 'lawton' });
+    expect(viewFor(g, heister.id, T0).players.find((p) => p.id === cop.id)!.station).toBeNull();
+    expect(viewFor(g, mate.id, T0).players.find((p) => p.id === cop.id)!.station).toBe('lawton');
+    expect(g.log.some((e) => e.text.includes('lawton') || e.text.includes('Lawton'))).toBe(false);
+
+    g = applyAction(g, 'p0', { type: 'tick' }, T0 + g.settings.setupSeconds * 1000 + 1);
+    expect(g.phase).toBe('heister');
+    expect(viewFor(g, heister.id, T0).players.find((p) => p.id === cop.id)!.station).toBe('lawton');
+    expect(g.log.some((e) => e.text === `${cop.name} starts at Lawton.`)).toBe(true);
+    expect(g.log.some((e) => e.text.startsWith(`${mate.name} was placed at `))).toBe(true);
+  });
+});
+
+describe('setup picks', () => {
+  it('lets players change their start until they lock in, and ends when all are locked', () => {
+    let g = setup(4);
+    const [h] = byRole(g, 'heister');
+    g = act(g, h.id, { type: 'chooseStart', station: 'recto' });
+    g = act(g, h.id, { type: 'chooseStart', station: 'lawton' });
+    expect(g.players.find((p) => p.id === h.id)!.station).toBe('lawton');
+    expect(g.trails[h.id]).toBeUndefined(); // nothing is applied until setup ends
+    const other = g.players.find((p) => p.id !== h.id)!;
+    expect(() => act(g, other.id, { type: 'ready' })).toThrow(/Pick a starting station/);
+    g = act(g, h.id, { type: 'ready' });
+    expect(() => act(g, h.id, { type: 'chooseStart', station: 'recto' })).toThrow(/locked in/);
+    for (const p of g.players.filter((p) => p.id !== h.id)) {
+      g = act(g, p.id, { type: 'chooseStart', station: 'pureza' });
+      g = act(g, p.id, { type: 'ready' });
+    }
+    expect(g.phase).toBe('heister');
+    expect(g.trails[h.id]).toEqual([{ round: 0, station: 'lawton' }]);
+  });
+});
+
+describe('police turns', () => {
+  it('lets one officer act at a time, in seat order, with a timer each', () => {
+    let g = placeAll(setup(6));
+    for (const h of byRole(g, 'heister')) g = act(g, h.id, { type: 'endTurn' });
+    const [first, second] = g.players.filter((p) => p.role === 'police' || p.role === 'traitor');
+    expect(g.policeTurn).toBe(first.id);
+    expect(() => act(g, second.id, { type: 'endTurn' })).toThrow(/Wait for your turn/);
+    g = act(g, first.id, { type: 'endTurn' });
+    expect(g.policeTurn).toBe(second.id);
+    const deadline = g.deadline!;
+    g = act(g, second.id, { type: 'tick' }, deadline + 1); // second runs out of time
+    expect(g.players.find((p) => p.id === second.id)!.done).toBe(true);
+    expect(g.policeTurn).not.toBe(second.id);
+    expect(g.deadline).toBe(deadline + 1 + g.settings.policeSeconds * 1000);
+  });
+});
+
+describe('search', () => {
+  it('moves the officer onto the station they search', () => {
+    let g = setup(4);
+    const cop = g.players.find((p) => p.role === 'police' || p.role === 'traitor')!;
+    g = placeAll(g, { [cop.id]: 'lawton' });
+    for (const h of byRole(g, 'heister')) g = act(g, h.id, { type: 'endTurn' });
+    while (g.policeTurn !== cop.id) g = act(g, g.policeTurn!, { type: 'endTurn' });
+    g = act(g, cop.id, { type: 'search', station: 'recto' });
+    expect(g.players.find((p) => p.id === cop.id)!.station).toBe('recto');
+    expect(g.log.at(-1)!.text).toMatch(/went to Recto and searched it/);
+  });
+});
+
+describe('one action per officer', () => {
+  it('ends the turn after a single Move, Search or Arrest', () => {
+    let g = placeAll(setup(6));
+    for (const h of byRole(g, 'heister')) g = act(g, h.id, { type: 'endTurn' });
+    const first = g.policeTurn!;
+    const from = g.players.find((p) => p.id === first)!.station!;
+    g = act(g, first, { type: 'move', path: [ADJ[from][0].to], express: false });
+    expect(g.players.find((p) => p.id === first)!.done).toBe(true);
+    expect(g.policeTurn).not.toBe(first);
+    expect(() => act(g, first, { type: 'search', station: ADJ[from][0].to })).toThrow(/turn is over/);
   });
 });

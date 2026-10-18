@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { stationLabel } from '../../shared/map';
 import type { PublicPlayer, View } from '../../shared/types';
 import { ART } from '../game/art';
-import { SPECTATOR_IDENTITY, tokenText, type Identity } from '../game/identity';
+import { SPECTATOR_IDENTITY, seatIdentities, tokenText, type Identity } from '../game/identity';
 import { actsThisPhase } from '../game/selection';
 import { TokenIcon } from './Token';
 
@@ -54,23 +54,29 @@ function roleBadge(p: PublicPlayer) {
 export function StatusStrip({ view, offset, ids }: { view: View; offset: number; ids: Record<string, Identity> }) {
   const secs = useCountdown(view.deadline, offset);
   const mm = secs === null ? '' : `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
-  const waiting = view.players.filter((p) => actsThisPhase(view.phase, p) && !p.done);
-  const mine = waiting.some((p) => p.id === view.me);
+  const pending = view.players.filter((p) => actsThisPhase(view.phase, p) && !p.done);
+  // In the Police Phase officers go one at a time, so the one acting now leads the queue.
+  const waiting = view.phase === 'police'
+    ? [...pending.filter((p) => p.id === view.policeTurn), ...pending.filter((p) => p.id !== view.policeTurn)]
+    : pending;
+  const mine = view.phase === 'police' ? view.policeTurn === view.me : waiting.some((p) => p.id === view.me);
+  const label = mine ? 'Your move ·' : view.phase === 'police' ? 'Now' : view.phase === 'setup' ? 'Not locked in' : 'Waiting on';
   return (
     <div className="status-strip">
       <span key={view.phase} className={`phase phase-${view.phase}`}>{PHASE_NAME[view.phase]}</span>
       {secs !== null && view.phase !== 'ended' && <span className={`timer ${secs <= 10 ? 'urgent' : ''}`} aria-live="off">{mm}</span>}
       {waiting.length > 0 && (
         <span className="waiting">
-          <span className="muted">{mine ? 'Your move ·' : 'Waiting on'}</span>
+          <span className="muted">{label}</span>
           {waiting.map((p) => (
-            <span key={p.id} className={`waiting-token ${p.id === view.me ? 'me' : ''}`} title={p.name}>
+            <span key={p.id} title={p.name}
+              className={`waiting-token ${p.id === view.me ? 'me' : ''} ${view.phase === 'police' && p.id === view.policeTurn ? 'current' : view.phase === 'police' ? 'queued' : ''}`}>
               <TokenIcon role={p.role} identity={ids[p.id] ?? SPECTATOR_IDENTITY} text={tokenText(p)} size={24} />
             </span>
           ))}
         </span>
       )}
-      {waiting.length === 0 && (view.phase === 'heister' || view.phase === 'police' || view.phase === 'info') && (
+      {waiting.length === 0 && view.phase !== 'ended' && (
         <span className="waiting muted">Everyone is done</span>
       )}
     </div>
@@ -99,10 +105,14 @@ export function PlayerList({ view, ids, focus, setFocus }: PlayerListProps) {
               onMouseEnter={() => setFocus(p.id)} onMouseLeave={() => setFocus(null)}
               onClick={() => setFocus(focus === p.id ? null : p.id)} title={`${id.name} token`}>
               <TokenIcon role={p.role} identity={id} text={tokenText(p)} size={34} />
-              <span className="pname">{p.name}{p.id === view.me && <em> (you)</em>}{p.isHost && <span title="Host"> ★</span>}</span>
+              <span className="pname">{p.name}{p.id === view.me && <em> (you)</em>}{p.isHost && <span title="Host"> ★</span>}
+                {p.cleared && <span className="tag cleared" title="A vote showed this officer is not the Crooked Cop">Cleared</span>}</span>
               {roleBadge(p)}
               <span className="pmeta">
-                {p.station ? stationLabel(p.station) : p.role === 'heister' && p.status === 'active' ? 'Location unknown' : ''}
+                {p.station ? stationLabel(p.station)
+                  : p.role === 'heister' && p.status === 'active'
+                    ? view.tipoff?.at[p.id] ? <span className="tip-meta">Tip-off R{view.tipoff.round}: {stationLabel(view.tipoff.at[p.id]!)}</span> : 'Location unknown'
+                    : ''}
                 {p.carried !== null && p.role === 'heister' ? ` · ${p.carried} carried` : ''}
                 {p.status !== 'active' && ` · ${p.status}`}
                 {p.skipsPolice && ' · sitting out'}
@@ -126,16 +136,50 @@ function bannerSub(view: View): string {
   const role = view.myRole;
   switch (view.phase) {
     case 'heister': return role === 'heister' ? 'Your move. Slip through the network.' : 'The Heisters are on the move…';
-    case 'police': return isOfficer(role) ? 'Your move. Search, chase, arrest.' : 'The Police are closing in…';
+    case 'police': return view.policeTurn === view.me ? 'Move, then search or arrest.' : isOfficer(role) ? 'Officers take turns. Watch the board.' : 'The Police are closing in…';
     case 'info': return role === 'heister' ? 'The Police compare notes…' : 'Share what you found. Someone is lying.';
     case 'ended': return view.endReason ?? '';
     default: return '';
   }
 }
 
+// When an accusation vote passes, everyone sees whether the accused really was the Crooked Cop.
+export function RevealCard({ view }: { view: View }) {
+  const id = view.reveal?.id ?? null;
+  const seen = useRef(id);
+  const [shown, setShown] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (id === null || seen.current === id) return; // not for a reveal that happened before you loaded
+    seen.current = id;
+    setShown(id);
+    const t = setTimeout(() => setShown(null), 5000);
+    return () => clearTimeout(t);
+  }, [id]);
+
+  if (shown === null || !view.reveal) return null;
+  const { target, guilty } = view.reveal;
+  const accused = view.players.find((p) => p.id === target);
+  const who = accused?.name ?? 'The accused';
+  const identity = seatIdentities(view.players)[target] ?? SPECTATOR_IDENTITY;
+  return (
+    <div className={`reveal-card ${guilty ? 'guilty' : 'innocent'}`} role="alert" onClick={() => setShown(null)}>
+      <div className="reveal-inner">
+        {accused && <TokenIcon role={guilty ? 'traitor' : 'police'} identity={identity} text={tokenText(accused)} size={110} />}
+        <div className="reveal-stamp">{guilty ? 'Guilty' : 'Innocent'}</div>
+        <h2>{guilty ? `${who} WAS the Crooked Cop` : `${who} is NOT the Crooked Cop`}</h2>
+        <p>{guilty ? 'They are removed from the force. The Heisters just lost their inside source.'
+          : "The vote passed against an honest officer. They can't arrest next round, and the real Crooked Cop is still out there."}</p>
+      </div>
+    </div>
+  );
+}
+
 // A full-width title card that sweeps across the screen whenever the phase changes.
 export function PhaseBanner({ view }: { view: View }) {
-  const key = `${view.phase}:${view.round}`;
+  // A fresh card also marks the moment your Police turn comes up.
+  const myPoliceTurn = view.phase === 'police' && view.policeTurn === view.me;
+  const key = `${view.phase}:${view.round}${myPoliceTurn ? ':me' : ''}`;
   const seen = useRef(key);
   const [shown, setShown] = useState<string | null>(null);
 
@@ -151,7 +195,7 @@ export function PhaseBanner({ view }: { view: View }) {
   if (!shown) return null;
   const ended = view.phase === 'ended';
   const art = ART.banner[view.phase];
-  const title = ended ? (view.winner === 'heisters' ? 'The Heisters got away' : 'Case closed') : PHASE_NAME[view.phase];
+  const title = ended ? (view.winner === 'heisters' ? 'The Heisters got away' : 'Case closed') : myPoliceTurn ? 'Your turn, Officer' : PHASE_NAME[view.phase];
   return (
     <div className={`phase-banner banner-${view.phase} ${ended ? `win-${view.winner}` : ''}`} key={shown} aria-hidden="true">
       <div className="band" style={art ? { backgroundImage: `url(${art})` } : undefined}>
