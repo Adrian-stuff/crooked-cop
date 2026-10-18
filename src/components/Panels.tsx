@@ -19,7 +19,14 @@ const PHASE_NAME: Record<string, string> = {
   lobby: 'Lobby', setup: 'Setup', heister: 'Heister Phase', police: 'Police Phase', info: 'Information Phase', ended: 'Case closed',
 };
 
-export function TopBar({ view, onLeave }: { view: View; onLeave: () => void }) {
+interface TopBarProps {
+  view: View;
+  onLeave: () => void;
+  sound?: boolean;
+  onSound?: (on: boolean) => void;
+}
+
+export function TopBar({ view, onLeave, sound, onSound }: TopBarProps) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -27,15 +34,13 @@ export function TopBar({ view, onLeave }: { view: View; onLeave: () => void }) {
         <span>The Crooked Cop</span>
       </div>
       <div className="room">Room <strong>{view.code}</strong></div>
-      {view.phase !== 'lobby' && (
-        <>
-          <div className="round">Round <strong key={view.round} className="pop">{Math.max(view.round, 0)}</strong>/{view.settings.maxRounds}</div>
-          <div className="taken" title="Artifacts taken, as announced after each Heister Phase">
-            <img src="/assets/artifact.png" alt="" width={22} height={22} /> <span key={view.announcedTaken} className="pop">{view.announcedTaken}</span>/{view.settings.artifactCount} taken
-          </div>
-        </>
+      {onSound && (
+        <button className="btn ghost small sound-toggle" aria-pressed={!!sound} onClick={() => onSound(!sound)}
+          title="Play a sound when it's your move">
+          {sound ? 'Sound on' : 'Sound off'}
+        </button>
       )}
-      <button className="btn ghost small leave" onClick={onLeave}>Leave</button>
+      <button className={`btn ghost small leave ${onSound ? 'with-sound' : ''}`} onClick={onLeave}>Leave</button>
     </header>
   );
 }
@@ -48,42 +53,6 @@ function roleBadge(p: PublicPlayer) {
     case 'spectator': return <span className="tag">Spectator</span>;
     default: return null;
   }
-}
-
-// Sits on top of the board: what phase it is, how long is left, and who the table is waiting on.
-export function StatusStrip({ view, offset, ids }: { view: View; offset: number; ids: Record<string, Identity> }) {
-  const secs = useCountdown(view.deadline, offset);
-  const mm = secs === null ? '' : `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
-  const pending = view.players.filter((p) => actsThisPhase(view.phase, p) && !p.done);
-  // In the Police Phase officers go one at a time, so the one acting now leads the queue.
-  const waiting = view.phase === 'police'
-    ? [...pending.filter((p) => p.id === view.policeTurn), ...pending.filter((p) => p.id !== view.policeTurn)]
-    : pending;
-  const mine = view.phase === 'police' ? view.policeTurn === view.me : waiting.some((p) => p.id === view.me);
-  const label = mine ? 'Your move ·' : view.phase === 'police' ? 'Now' : view.phase === 'setup' ? 'Not locked in' : 'Waiting on';
-  return (
-    <div className="status-strip">
-      <span key={view.phase} className={`phase phase-${view.phase}`}>{PHASE_NAME[view.phase]}</span>
-      {secs !== null && view.phase !== 'ended' && <span className={`timer ${secs <= 10 ? 'urgent' : ''}`} aria-live="off">{mm}</span>}
-      {waiting.length > 0 && (
-        <span className="waiting">
-          <span className="muted">{label}</span>
-          {waiting.map((p) => (
-            <span key={p.id} title={p.afk ? `${p.name} (AFK)` : p.name}
-              className={`waiting-token ${p.afk || !p.connected ? 'afk' : ''} ${p.id === view.me ? 'me' : ''} ${view.phase === 'police' && p.id === view.policeTurn ? 'current' : view.phase === 'police' ? 'queued' : ''}`}>
-              <TokenIcon role={p.role} identity={ids[p.id] ?? SPECTATOR_IDENTITY} text={tokenText(p)} size={24} />
-            </span>
-          ))}
-        </span>
-      )}
-      {view.players.find((p) => p.id === view.me)?.afk && (
-        <span className="afk-note" role="status">You're marked AFK. Take any action to clear it.</span>
-      )}
-      {waiting.length === 0 && view.phase !== 'ended' && (
-        <span className="waiting muted">Everyone is done</span>
-      )}
-    </div>
-  );
 }
 
 interface PlayerListProps {
@@ -208,28 +177,6 @@ export function PhaseBanner({ view }: { view: View }) {
         <div className="sub">{bannerSub(view)}</div>
       </div>
     </div>
-  );
-}
-
-export function Envelopes({ view }: { view: View }) {
-  const list = [...view.envelopes].reverse();
-  if (view.phase === 'lobby') return null;
-  return (
-    <section className="panel envelopes">
-      <h3>{view.godView ? 'All envelopes' : 'Your envelopes'}</h3>
-      {list.length === 0 && <p className="muted">Search a station to receive a sealed envelope. Its contents are private to you.</p>}
-      <div className="env-list">
-        {list.map((e, i) => (
-          <article key={e.id} className={`envelope ${e.kind} ${i === 0 ? 'newest' : ''}`} style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}>
-            <header>
-              <span>{e.title}</span>
-              <span className="env-round">R{e.round}{view.godView ? ` · ${view.players.find((p) => p.id === e.to)?.name}` : ''}</span>
-            </header>
-            <ul>{e.lines.map((l, j) => <li key={j}>{l}</li>)}</ul>
-          </article>
-        ))}
-      </div>
-    </section>
   );
 }
 

@@ -57,8 +57,28 @@ export interface Envelope {
   round: number;
   kind: 'search' | 'traitor' | 'clue';
   title: string;
-  lines: string[];
-  area?: string[]; // stations a Search covered
+  lines: string[]; // plain-text version, for older clients and saved games
+  search?: SearchResult;
+  tip?: TipResult[];
+}
+
+// What a Search found, so the client can lay it out instead of reading sentences.
+export interface SearchResult {
+  station: string;
+  area: string[]; // every station the sweep covered, the searched one first
+  heistersNow: string[]; // stations in the area with a Heister on them now
+  tracks: { station: string; ago: number }[]; // Heister visits in the last 2 rounds
+  hidden: string[]; // stations still holding an Artifact
+  taken: { station: string; round: number }[];
+  clue: string; // random field clue, not tied to the area
+}
+
+// One Heister's position in a Crooked Cop tip-off.
+export interface TipResult {
+  id: string;
+  label: string;
+  station: string | null;
+  status: PlayerStatus;
 }
 
 export interface LogEntry {
@@ -86,6 +106,14 @@ export interface Reveal {
 export interface Tipoff {
   round: number;
   at: Record<string, string | null>;
+}
+
+// An officer's action this round. All of these are announced in the log, so everyone may see them.
+export interface RoundAction {
+  by: string;
+  kind: 'move' | 'search' | 'arrest' | 'pass';
+  station: string;
+  ok?: boolean; // arrests: whether anyone was caught
 }
 
 export interface Visit {
@@ -121,6 +149,8 @@ export interface GameState {
   policeTurn: string | null; // the officer acting now in the Police Phase
   reveal: Reveal | null; // result of the latest passed accusation vote
   tipoff: Tipoff | null; // where the Heisters were at the Crooked Cop's latest tip-off
+  roundActions: RoundAction[]; // officers' public actions this round
+  takenThisRound: number; // Artifacts taken in this round's Heister Phase (as announced)
 }
 
 export type Action =
@@ -187,6 +217,8 @@ export interface View {
   policeTurn: string | null;
   reveal: Reveal | null;
   tipoff: Tipoff | null; // only for the Crooked Cop
+  roundActions: RoundAction[];
+  takenThisRound: number;
 }
 
 export type ChatChannel = 'lobby' | 'police' | 'heisters' | `dm:${string}`;

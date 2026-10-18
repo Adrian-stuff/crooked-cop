@@ -3,10 +3,13 @@ import type { View } from '../../shared/types';
 import { ActionDock } from '../components/ActionDock';
 import { Board } from '../components/Board';
 import { Chat } from '../components/Chat';
-import { Envelopes, Log, PhaseBanner, PlayerList, RevealCard, RoleReveal, StatusStrip, TopBar } from '../components/Panels';
+import { Envelopes } from '../components/Envelopes';
+import { Log, PhaseBanner, PlayerList, RevealCard, RoleReveal, TopBar } from '../components/Panels';
+import { StatusStrip } from '../components/StatusStrip';
 import { StationPopover } from '../components/StationPopover';
 import { TokenIcon } from '../components/Token';
 import { SPECTATOR_IDENTITY, seatIdentities } from '../game/identity';
+import { unlockSound, useTurnAlert } from '../game/turnAlert';
 import { marksFor, type Mode } from '../game/selection';
 import type { Game } from '../net/useGame';
 
@@ -18,9 +21,37 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
   const [showNames, setShowNames] = useState(true);
   const [focus, setFocus] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
+  const [sound, setSound] = useState(() => {
+    try { return localStorage.getItem('cc-sound') === 'on'; } catch { return false; }
+  });
+  const toggleSound = (on: boolean) => {
+    if (on) unlockSound();
+    setSound(on);
+    try { localStorage.setItem('cc-sound', on ? 'on' : 'off'); } catch { /* private mode */ }
+  };
+  useTurnAlert(view, sound);
   const ids = useMemo(() => seatIdentities(view.players), [view.players]);
   // Keep the area your Search swept lit up for the rest of the round.
-  const swept = view.envelopes.filter((e) => e.kind === 'search' && e.to === view.me && e.round === view.round).at(-1)?.area;
+  // Hovering or pinning an envelope's area chip lights that sweep up instead.
+  const [hoverEnv, setHoverEnv] = useState<string | null>(null);
+  const [pinnedEnv, setPinnedEnv] = useState<string | null>(null);
+  const shownEnv = view.envelopes.find((e) => e.id === (hoverEnv ?? pinnedEnv));
+  const swept = shownEnv?.search?.area
+    ?? view.envelopes.filter((e) => e.kind === 'search' && e.to === view.me && e.round === view.round).at(-1)?.search?.area;
+  // Stations where your own searches spotted a Heister in the last 3 rounds (latest per station).
+  const lastSeen = useMemo(() => {
+    if (view.godView) return [];
+    const seen: Record<string, number> = {};
+    for (const e of view.envelopes) {
+      if (e.to !== view.me || !e.search || view.round - e.round > 2) continue;
+      for (const s of e.search.heistersNow) seen[s] = Math.max(seen[s] ?? 0, e.round);
+    }
+    return Object.entries(seen).map(([station, round]) => ({ station, round }));
+  }, [view.envelopes, view.me, view.round, view.godView]);
+  const highlightEnv = (id: string | null, pin?: boolean) => {
+    if (pin) setPinnedEnv((p) => (p === id ? null : id));
+    else setHoverEnv(id);
+  };
 
   // Reset any half-built selection when the phase changes.
   useEffect(() => {
@@ -53,7 +84,7 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
 
   return (
     <div className="app game-screen">
-      <TopBar view={view} onLeave={game.leave} />
+      <TopBar view={view} onLeave={game.leave} sound={sound} onSound={toggleSound} />
       <main className="game">
         <div className="board-col">
           <div className="board-wrap">
@@ -61,7 +92,7 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
             <div className="board-scroll">
               <div className="board-stage">
                 <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails}
-                  showNames={showNames} focus={focus} onFocus={setFocus} selected={picked} swept={swept}
+                  showNames={showNames} focus={focus} onFocus={setFocus} selected={picked} swept={swept} lastSeen={lastSeen}
                   onPick={(id) => setPicked(mode || id === picked ? null : id)} />
                 {picked && !mode && (
                   <StationPopover view={view} station={picked} ids={ids} act={game.act} onClose={() => setPicked(null)} />
@@ -93,7 +124,7 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
           </div>
         </div>
         <aside className="side-col">
-          <Envelopes view={view} />
+          <Envelopes view={view} ids={ids} highlight={hoverEnv ?? pinnedEnv} onHighlight={highlightEnv} />
           <Chat view={view} messages={game.chat} say={game.say} />
         </aside>
       </main>

@@ -48,16 +48,40 @@ function Card({ step, label, icon, kind = '', selected, done, disabled, title, o
   );
 }
 
-function Dock({ title, sub, children, tone = '', hint }: { title: ReactNode; sub?: ReactNode; children?: ReactNode; tone?: string; hint?: string | null }) {
+interface DockProps { title: ReactNode; sub?: ReactNode; children?: ReactNode; tone?: string; hint?: string | null; recap?: ReactNode }
+
+function Dock({ title, sub, children, tone = '', hint, recap }: DockProps) {
   return (
     <section className={`dock ${tone}`} aria-label="Your actions">
       {hint && <div className="dock-hint" key={hint} role="status">{hint}</div>}
+      {recap && <div className="dock-recap">{recap}</div>}
       <div className="dock-text">
         <h2>{title}</h2>
         {sub && <p>{sub}</p>}
       </div>
       {children && <div className="dock-actions">{children}</div>}
     </section>
+  );
+}
+
+// What the officers did this round, shown while everyone compares notes.
+function RoundRecap({ view }: { view: View }) {
+  const name = (id: string) => (id === view.me ? 'You' : view.players.find((p) => p.id === id)?.name ?? 'Someone');
+  const items = view.roundActions.map((a, i) => {
+    const who = name(a.by);
+    const at = stationLabel(a.station);
+    const text = a.kind === 'search' ? `${who} searched ${at}`
+      : a.kind === 'arrest' ? (a.ok ? `${who} caught a Heister at ${at}` : `${who}'s arrest at ${at} failed`)
+        : a.kind === 'move' ? `${who} moved to ${at}` : `${who} passed`;
+    const tone = a.kind === 'arrest' ? (a.ok ? 'clear' : 'danger') : a.kind === 'search' ? 'search' : '';
+    return <span key={i} className={`recap-item ${tone}`}>{text}</span>;
+  });
+  return (
+    <>
+      <span className="recap-title">Round {view.round} recap</span>
+      {view.takenThisRound > 0 && <span className="recap-item gold">+{view.takenThisRound} Artifact{view.takenThisRound > 1 ? 's' : ''} taken</span>}
+      {items.length ? items : <span className="recap-item">No officer acted this round</span>}
+    </>
   );
 }
 
@@ -109,7 +133,7 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
   }
 
   if (view.myRole === 'spectator') {
-    return <Dock title={view.godView ? 'Facilitator view' : 'Spectating'}
+    return <Dock title={view.godView ? 'Facilitator view' : 'Spectating'} recap={view.phase === 'info' ? <RoundRecap view={view} /> : null}
       sub={view.godView ? 'You can see every Heister, every Artifact and the Crooked Cop. Keep it to yourself.'
         : 'You see what the public board shows. Hidden positions are revealed at the end.'} />;
   }
@@ -117,7 +141,7 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
   if (!active) {
     const msg = me.status === 'arrested' ? 'You were arrested. Watch the rest of the case unfold.'
       : me.status === 'exposed' ? 'You were exposed as the Crooked Cop and removed from the force.' : 'You escaped!';
-    return <Dock title="Out of play" sub={msg} />;
+    return <Dock title="Out of play" sub={msg} recap={view.phase === 'info' ? <RoundRecap view={view} /> : null} />;
   }
 
   if (view.phase === 'setup') {
@@ -193,6 +217,7 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
 
   // Information phase
   const acc = view.accusation;
+  const recap = <RoundRecap view={view} />;
   const officers = view.players.filter((p) => isOfficer(p.role) && p.status === 'active');
   const target = acc && view.players.find((p) => p.id === acc.target);
   const yes = acc ? Object.values(acc.votes).filter(Boolean).length : 0;
@@ -202,7 +227,7 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
       sub={acc && target
         ? <><strong>{view.players.find((p) => p.id === acc.by)?.name}</strong> accuses <strong>{target.name}</strong>. Yes {yes} · No {no} of {officers.length}</>
         : `Compare envelopes in chat. The round ends when everyone is done or the timer runs out.${view.accusationUsed ? " This round's accusation has been used." : ''}`}
-      tone={acc ? 'accusing' : ''}>
+      tone={acc ? 'accusing' : ''} recap={recap}>
       {acc && officer && (
         <>
           <button className={`btn arrest ${acc.votes[me.id] === true ? 'selected' : ''}`} onClick={() => act({ type: 'vote', yes: true })}>Guilty</button>

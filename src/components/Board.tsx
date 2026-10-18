@@ -1,6 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { EXIT_STATION, LINES, MAP_HEIGHT, MAP_WIDTH, STATIONS, STATION_BY_ID, linesAt, lineName, type LabelSide } from '../../shared/map';
-import type { PublicPlayer, View } from '../../shared/types';
+import { EXIT_STATION, LINES, MAP_HEIGHT, MAP_WIDTH, STATIONS, STATION_BY_ID, linesAt, lineName, type LabelSide, searchArea } from '../../shared/map';
+import type { PublicPlayer, RoundAction, View } from '../../shared/types';
 import { SPECTATOR_IDENTITY, seatIdentities, tokenText, type Identity } from '../game/identity';
 import { BOARD_PAD as PAD } from '../game/geometry';
 import { trackPoints } from '../game/route';
@@ -20,6 +20,7 @@ interface Props {
   onPick?: (id: string | null) => void; // a station clicked outside any mode (null: empty board)
   selected?: string | null;
   swept?: string[]; // stations your Search covered this round
+  lastSeen?: { station: string; round: number }[]; // Heisters your searches spotted recently
 }
 
 const LABEL_OFFSET: Record<LabelSide, [number, number, 'start' | 'middle' | 'end']> = {
@@ -65,6 +66,7 @@ interface PawnProps {
   station: string;
   me: boolean;
   onTurn: boolean;
+  did?: RoundAction;
   focused: boolean;
   dimmed: boolean;
   showTag: boolean;
@@ -73,7 +75,7 @@ interface PawnProps {
   onHover: (id: string | null) => void;
 }
 
-function Pawn({ p, identity, x, y, station, me, onTurn, focused, dimmed, showTag, clickable, onClick, onHover }: PawnProps) {
+function Pawn({ p, identity, x, y, station, me, onTurn, did, focused, dimmed, showTag, clickable, onClick, onHover }: PawnProps) {
   const ref = useRef<SVGGElement>(null);
   const last = useRef<{ x: number; y: number; station: string } | null>(null);
 
@@ -115,6 +117,13 @@ function Pawn({ p, identity, x, y, station, me, onTurn, focused, dimmed, showTag
               <text y={6} textAnchor="middle" key={p.carried}>{p.carried}</text>
             </g>
           )}
+          {did && (
+            <g transform="translate(26 26)" className={`done-badge ${did.kind} ${did.ok === false ? 'failed' : did.ok ? 'caught' : ''}`}>
+              <circle r={12} />
+              <text y={5} textAnchor="middle">{DID_GLYPH[did.kind]}</text>
+              <title>{DID_TEXT[did.kind]}</title>
+            </g>
+          )}
           {(p.afk || !p.connected) && p.status === 'active' && (
             <g transform="translate(-26 -26)" className="afk-badge">
               <rect x={-20} y={-11} width={40} height={22} rx={11} />
@@ -137,6 +146,45 @@ function Pawn({ p, identity, x, y, station, me, onTurn, focused, dimmed, showTag
         </g>
       )}
       <title>{`${p.name} · ${identity.name}${heister ? ` · ${p.label} Heister` : ''}${p.status !== 'active' ? ` · ${p.status}` : ''}${p.afk ? ' · AFK' : ''}${p.connected ? '' : ' · offline'}`}</title>
+    </g>
+  );
+}
+
+const DID_GLYPH: Record<RoundAction['kind'], string> = { move: '→', search: 'S', arrest: '!', pass: '–' };
+const DID_TEXT: Record<RoundAction['kind'], string> = { move: 'Moved this round', search: 'Searched this round', arrest: 'Tried an arrest this round', pass: 'Passed this round' };
+
+// What happened on the map this round: teammates' sweeps, failed arrests, and Heisters you've spotted.
+function RoundMarks({ view, lastSeen }: { view: View; lastSeen: { station: string; round: number }[] }) {
+  const live = view.phase === 'police' || view.phase === 'info';
+  const sweeps = live ? view.roundActions.filter((a) => a.kind === 'search' && a.by !== view.me) : [];
+  const swept = new Set(sweeps.flatMap((a) => searchArea(a.station)));
+  const failed = live ? view.roundActions.filter((a) => a.kind === 'arrest' && a.ok === false) : [];
+  return (
+    <g pointerEvents="none">
+      {[...swept].map((id) => {
+        const st = STATION_BY_ID[id];
+        return <circle key={`sw-${id}`} cx={st.x} cy={st.y} r={26} className="team-sweep" />;
+      })}
+      {failed.map((a) => {
+        const st = STATION_BY_ID[a.station];
+        return (
+          <g key={`fa-${a.by}`} transform={`translate(${st.x} ${st.y})`} className="failed-arrest">
+            <path d="M-16 -16 L16 16 M16 -16 L-16 16" />
+            <title>An arrest failed here this round</title>
+          </g>
+        );
+      })}
+      {lastSeen.map(({ station, round }) => {
+        const st = STATION_BY_ID[station];
+        const age = view.round - round;
+        return (
+          <g key={`ls-${station}`} transform={`translate(${st.x + 38} ${st.y - 34})`} className="last-seen" opacity={age <= 0 ? 1 : age === 1 ? 0.7 : 0.45}>
+            <rect x={-40} y={-14} width={80} height={26} rx={13} />
+            <text y={5} textAnchor="middle">Seen R{round}</text>
+            <title>{`Your search spotted a Heister here in round ${round}`}</title>
+          </g>
+        );
+      })}
     </g>
   );
 }
@@ -207,7 +255,7 @@ function ArtifactLayer({ artifacts }: { artifacts: Record<string, number> | null
   );
 }
 
-export function Board({ view, marks = {}, onStation, showTrails, showNames = true, focus = null, onFocus, onPick, selected = null, swept = [] }: Props) {
+export function Board({ view, marks = {}, onStation, showTrails, showNames = true, focus = null, onFocus, onPick, selected = null, swept = [], lastSeen = [] }: Props) {
   const ids = useMemo(() => seatIdentities(view?.players ?? []), [view?.players]);
   const exits = view?.exits ?? [EXIT_STATION];
 
@@ -292,12 +340,14 @@ export function Board({ view, marks = {}, onStation, showTrails, showNames = tru
         );
       })}
 
+      {view && <RoundMarks view={view} lastSeen={lastSeen} />}
       <ArtifactLayer artifacts={view?.artifacts ?? null} />
       {view && <TipoffLayer view={view} shown={new Set(pawns.map((d) => d.p.id))} />}
 
       {pawns.map(({ p, station, crowded, x, y }) => (
         <Pawn key={p.id} p={p} identity={ids[p.id] ?? SPECTATOR_IDENTITY} x={x} y={y} station={station}
-          me={p.id === view?.me} onTurn={view?.phase === 'police' && view.policeTurn === p.id} focused={spot === p.id} dimmed={!!spot && spot !== p.id}
+          me={p.id === view?.me} onTurn={view?.phase === 'police' && view.policeTurn === p.id}
+          did={view && (view.phase === 'police' || view.phase === 'info') ? view.roundActions.find((a) => a.by === p.id) : undefined} focused={spot === p.id} dimmed={!!spot && spot !== p.id}
           showTag={showNames && !crowded} clickable={(!!onStation && !!marks[station]) || !!onPick}
           onClick={() => (marks[station] ? onStation?.(station) : onPick?.(station))} onHover={hover} />
       ))}

@@ -3,10 +3,10 @@
 // It runs the same in the Node dev server and in a Supabase edge function.
 
 import {
-  ADJ, EXIT_STATION, EXPRESS_STOPS, STATIONS, STATION_BY_ID, distance, exitsFor, expressStep, isAdjacent, lineName, linesAt, searchArea, stationLabel,
+  ADJ, EXIT_STATION, EXPRESS_STOPS, STATIONS, distance, exitsFor, expressStep, isAdjacent, lineName, linesAt, searchArea, stationLabel,
 } from './map.ts';
 import {
-  DEFAULT_SETTINGS, type Action, type Envelope, type GameState, type LogEntry, type Player,
+  DEFAULT_SETTINGS, type Action, type Envelope, type GameState, type LogEntry, type Player, type SearchResult,
   type PublicPlayer, type PublicRole, type Settings, type View,
 } from './types.ts';
 
@@ -59,7 +59,7 @@ export function createGame(code: string, hostId: string, hostName: string, seed:
     players: [blankPlayer(hostId, hostName, true)], artifacts: {}, announcedTaken: 0, visits: [],
     pickups: [], arrestsThisRound: 0, exits: [EXIT_STATION], exitStreak: {}, exitMustClear: [], accusation: null,
     accusationUsed: false, envelopes: [], log: [], winner: null, endReason: null, trails: {}, nextId: 1,
-    policeTurn: null, reveal: null, tipoff: null,
+    policeTurn: null, reveal: null, tipoff: null, roundActions: [], takenThisRound: 0,
   };
 }
 
@@ -132,8 +132,8 @@ function markAfk(g: GameState, p: Player) {
   log(g, 'info', `${p.name} is AFK (ran out of time).`);
 }
 
-function envelope(g: GameState, to: string, kind: Envelope['kind'], title: string, lines: string[], area?: string[]) {
-  g.envelopes.push({ id: `e${g.nextId++}`, to, round: g.round, kind, title, lines: lines.map(tidy), ...(area && { area }) });
+function envelope(g: GameState, to: string, kind: Envelope['kind'], title: string, lines: string[], extra: Pick<Envelope, 'search' | 'tip'> = {}) {
+  g.envelopes.push({ id: `e${g.nextId++}`, to, round: g.round, kind, title, lines: lines.map(tidy), ...extra });
 }
 
 function plural(n: number, word: string) {
@@ -196,7 +196,7 @@ function startGame(g: GameState, t: number) {
   Object.assign(g, {
     round: 0, visits: [], pickups: [], arrestsThisRound: 0, exitStreak: {}, exitMustClear: [],
     accusation: null, accusationUsed: false, envelopes: [], log: [], winner: null, endReason: null,
-    trails: {}, announcedTaken: 0, policeTurn: null, reveal: null, tipoff: null,
+    trails: {}, announcedTaken: 0, policeTurn: null, reveal: null, tipoff: null, roundActions: [], takenThisRound: 0,
   });
   g.phase = 'setup';
   g.deadline = t + g.settings.setupSeconds * 1000;
@@ -251,6 +251,8 @@ function beginRound(g: GameState, round: number, t: number) {
   g.deadline = t + g.settings.heisterSeconds * 1000;
   g.accusation = null;
   g.accusationUsed = false;
+  g.roundActions = [];
+  g.takenThisRound = 0;
   for (const p of g.players) p.done = !(p.role === 'heister' && p.status === 'active');
   log(g, 'info', `Round ${round}: the Heisters are on the move.`);
 }
@@ -259,6 +261,7 @@ function endHeisterPhase(g: GameState, t: number) {
   const taken = g.players
     .filter((p) => p.role === 'heister' && p.status !== 'arrested')
     .reduce((sum, p) => sum + p.carried, 0);
+  g.takenThisRound = Math.max(0, taken - g.announcedTaken);
   g.announcedTaken = taken;
   log(g, 'announce', `${plural(taken, 'Artifact')} of ${g.settings.artifactCount} ${taken === 1 ? 'has' : 'have'} been taken.`);
   g.phase = 'police';
@@ -289,7 +292,9 @@ function finishPoliceTurn(g: GameState, p: Player) {
           ? `${heisterTag(h)} is at ${stationLabel(h.station!)}.`
           : `${heisterTag(h)} is ${h.status}.`,
       );
-    envelope(g, p.id, 'traitor', 'Crooked tip-off', lines);
+    const tip = g.players.filter((h) => h.role === 'heister')
+      .map((h) => ({ id: h.id, label: h.label ?? 'H', station: h.status === 'active' ? h.station : null, status: h.status }));
+    envelope(g, p.id, 'traitor', 'Crooked tip-off', lines, { tip });
     g.tipoff = {
       round: g.round,
       at: Object.fromEntries(g.players.filter((h) => h.role === 'heister').map((h) => [h.id, h.status === 'active' ? h.station : null])),
@@ -395,30 +400,32 @@ function fieldClue(g: GameState): string {
 }
 
 // A Search sweeps an area (see searchArea), reporting on every station in it.
-function searchReport(g: GameState, station: string, area: string[]): string[] {
+function searchResult(g: GameState, station: string): SearchResult {
+  const area = searchArea(station);
+  return {
+    station,
+    area,
+    heistersNow: area.filter((s) => activeHeisters(g).some((h) => h.station === s)),
+    tracks: area
+      .map((s) => g.visits.filter((v) => v.station === s && v.round >= g.round - 2 && v.round > 0).sort((x, y) => y.round - x.round)[0])
+      .filter(Boolean)
+      .map((v) => ({ station: v.station, ago: g.round - v.round })),
+    hidden: area.filter((s) => (g.artifacts[s] ?? 0) > 0),
+    taken: g.pickups.filter((p) => area.includes(p.station)).map((p) => ({ station: p.station, round: p.round })),
+    clue: fieldClue(g),
+  };
+}
+
+// The same result as short sentences.
+function searchLines(r: SearchResult): string[] {
   const names = (ids: string[]) => ids.map(stationLabel).join(', ');
-  const others = area.filter((s) => s !== station);
-  const lines: string[] = [
-    STATION_BY_ID[station].interchange
-      ? `Swept ${stationLabel(station)} and every stop around it: ${names(others)}.`
-      : `Swept ${stationLabel(station)} and 2 stops each way on the ${linesAt(station).map(lineName).join('/')} line: ${names(others)}.`,
-  ];
-  const here = area.filter((s) => activeHeisters(g).some((h) => h.station === s));
-  lines.push(here.length ? `A Heister is at ${names(here)} RIGHT NOW.` : 'No Heister anywhere in the area right now.');
-  const recent = area
-    .map((s) => g.visits.filter((v) => v.station === s && v.round >= g.round - 2 && v.round > 0).sort((a, b) => b.round - a.round)[0])
-    .filter(Boolean);
-  for (const v of recent) {
-    const ago = g.round - v.round;
-    lines.push(`A Heister passed through ${stationLabel(v.station)} ${ago === 0 ? 'this round' : `${plural(ago, 'round')} ago`}.`);
-  }
-  if (!recent.length) lines.push('No Heister activity in the area in the last 2 rounds.');
-  const hidden = area.filter((s) => (g.artifacts[s] ?? 0) > 0);
-  if (hidden.length) lines.push(`Artifacts still hidden at ${names(hidden)}.`);
-  const taken = g.pickups.filter((p) => area.includes(p.station));
-  for (const p of taken) lines.push(`An Artifact was taken from ${stationLabel(p.station)} ${p.round === 0 ? 'at the start' : `in round ${p.round}`}.`);
-  if (!hidden.length && !taken.length) lines.push('No sign of any Artifact in the area.');
-  lines.push(`Field clue: ${fieldClue(g)}`);
+  const lines = [`Swept ${r.area.length} stations around ${stationLabel(r.station)}.`];
+  if (r.heistersNow.length) lines.push(`Heister at ${names(r.heistersNow)} right now.`);
+  for (const t of r.tracks) lines.push(`Passed ${stationLabel(t.station)} ${t.ago === 0 ? 'this round' : `${plural(t.ago, 'round')} ago`}.`);
+  if (r.hidden.length) lines.push(`Artifact hidden at ${names(r.hidden)}.`);
+  for (const t of r.taken) lines.push(`Artifact taken from ${stationLabel(t.station)} ${t.round === 0 ? 'at the start' : `in round ${t.round}`}.`);
+  if (!r.heistersNow.length && !r.tracks.length && !r.hidden.length && !r.taken.length) lines.push('All clear in the area.');
+  lines.push(`Field clue: ${r.clue}`);
   return lines;
 }
 
@@ -434,6 +441,8 @@ function upgrade(g: GameState): GameState {
   g.reveal ??= null;
   g.tipoff ??= null;
   if (g.policeTurn === undefined) g.policeTurn = null;
+  g.roundActions ??= [];
+  g.takenThisRound ??= 0;
   if (g.phase === 'police' && !g.policeTurn) g.policeTurn = activePolice(g).find((p) => !p.done)?.id ?? null;
   return g;
 }
@@ -530,6 +539,7 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
         me.station = action.path[action.path.length - 1];
         me.moved = true;
         log(g, 'info', `${me.name} ${action.express ? 'took the Express' : 'moved'} to ${stationLabel(me.station)}.`);
+        g.roundActions.push({ by: me.id, kind: 'move', station: me.station });
         // One action per officer per round: moving uses it.
         finishPoliceTurn(g, me);
         maybeEndPolicePhase(g, t);
@@ -547,11 +557,12 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
         fail(g.settings.searchRange === 0 ? 'You can only search your own station.' : `You can only search within ${plural(g.settings.searchRange, 'stop')} of you.`);
       }
       me.acted = 'search';
-      const area = searchArea(action.station);
-      envelope(g, me.id, 'search', `Search: ${stationLabel(action.station)}`, searchReport(g, action.station, area), area);
+      const result = searchResult(g, action.station);
+      envelope(g, me.id, 'search', `Search: ${stationLabel(action.station)}`, searchLines(result), { search: result });
       // Searching takes the officer to the station they searched.
       const went = me.station !== action.station;
       me.station = action.station;
+      g.roundActions.push({ by: me.id, kind: 'search', station: action.station });
       log(g, 'info', went ? `${me.name} went to ${stationLabel(action.station)} and searched it.` : `${me.name} searched ${stationLabel(action.station)}.`);
       finishPoliceTurn(g, me);
       maybeEndPolicePhase(g, t);
@@ -575,6 +586,7 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
       g.arrestsThisRound++;
       me.acted = 'arrest';
       const caught = activeHeisters(g).filter((h) => h.station === target);
+      g.roundActions.push({ by: me.id, kind: 'arrest', station: target, ok: caught.length > 0 });
       if (caught.length) {
         for (const h of caught) {
           h.status = 'arrested';
@@ -605,6 +617,7 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
       } else if (g.phase === 'police') {
         if (!isPolice(me) || me.status !== 'active') fail('It is the Police Phase.');
         if (g.policeTurn !== me.id) fail('Wait for your turn.');
+        if (!me.moved && !me.acted) g.roundActions.push({ by: me.id, kind: 'pass', station: me.station! });
         finishPoliceTurn(g, me);
         maybeEndPolicePhase(g, t);
       } else fail('Nothing to end right now.');
@@ -784,5 +797,7 @@ export function viewFor(state: GameState, viewerId: string, t: number): View {
     policeTurn: g.policeTurn ?? null,
     reveal: g.reveal ?? null,
     tipoff: myRole === 'traitor' ? g.tipoff ?? null : null,
+    roundActions: g.roundActions,
+    takenThisRound: g.takenThisRound,
   };
 }

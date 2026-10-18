@@ -424,7 +424,27 @@ describe('search area', () => {
     while (g.policeTurn !== cop.id) g = act(g, g.policeTurn!, { type: 'endTurn' });
     g = act(g, cop.id, { type: 'search', station: 'recto' }); // Legarda is 2 stops from Recto on its line
     const env = viewFor(g, cop.id, T0).envelopes.at(-1)!;
-    expect(env.area).toContain('legarda');
-    expect(env.lines.join(' ')).toMatch(/A Heister is at Legarda RIGHT NOW/);
+    expect(env.search!.area).toContain('legarda');
+    expect(env.search!.heistersNow).toEqual(['legarda']);
+    expect(env.lines.join(' ')).toMatch(/Heister at Legarda right now/);
+  });
+});
+
+describe('round actions', () => {
+  it('records officers\' public actions for the round and clears them next round', () => {
+    let g = placeAll(setup(6));
+    for (const h of byRole(g, 'heister')) g = act(g, h.id, { type: 'endTurn' });
+    const first = g.policeTurn!;
+    const at = g.players.find((p) => p.id === first)!.station!;
+    g = act(g, first, { type: 'search', station: at });
+    const second = g.policeTurn!;
+    g = act(g, second, { type: 'endTurn' });
+    expect(g.roundActions).toEqual([
+      { by: first, kind: 'search', station: at },
+      { by: second, kind: 'pass', station: g.players.find((p) => p.id === second)!.station },
+    ]);
+    let t = T0;
+    while (g.round === 1) g = act(g, first, { type: 'tick' }, (t += 61_000));
+    expect(g.roundActions).toEqual([]);
   });
 });
