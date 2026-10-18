@@ -4,7 +4,7 @@
 // It runs the same in the Node dev server and in a Supabase edge function.
 
 import {
-  ADJ, EXIT_STATION, STATIONS, STATION_BY_ID, distance, exitsFor, expressStep, isAdjacent, lineName, linesAt, searchArea, stationLabel,
+  ADJ, EXIT_STATION, EXPRESS_STOPS, STATIONS, STATION_BY_ID, distance, exitsFor, expressStep, isAdjacent, lineName, linesAt, searchArea, stationLabel,
 } from './map.ts';
 import {
   DEFAULT_SETTINGS, type Action, type Envelope, type GameState, type LogEntry, type Player,
@@ -154,8 +154,8 @@ export function heisterCountFor(settings: Settings, n: number): number {
 // Validates a move path (the stations after the start).
 export function validatePath(from: string, path: string[], express: boolean): void {
   if (path.length === 0) fail('Pick at least one station to move.');
-  if (express ? path.length > 4 : path.length > 2) {
-    fail(express ? 'Express moves at most 4 stations.' : 'You can move 1 to 2 stations.');
+  if (express ? path.length > EXPRESS_STOPS : path.length > 2) {
+    fail(express ? `Express moves at most ${EXPRESS_STOPS} stations.` : 'You can move 1 to 2 stations.');
   }
   const seen = new Set([from]);
   let prev = from;

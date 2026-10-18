@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { escapeTarget } from '../../shared/engine';
-import { stationLabel } from '../../shared/map';
+import { EXPRESS_STOPS, stationLabel } from '../../shared/map';
 import type { Action, View } from '../../shared/types';
 import type { Mode } from '../game/selection';
 
@@ -18,7 +18,7 @@ const isOfficer = (role: string) => role === 'police' || role === 'traitor';
 const HINT: Partial<Record<NonNullable<Mode>, string>> = {
   start: 'Click any station to start there',
   move: 'Pick up to 2 stops on the map',
-  express: 'Ride up to 4 stops. Change lines only at interchanges',
+  express: `Ride up to ${EXPRESS_STOPS} stops. Change lines only at interchanges`,
   search: "Click a blue-ringed station: you'll go there and sweep the area around it",
   arrest: "Click a red-ringed station. A wrong arrest costs you next round's Police Phase",
 };
@@ -92,7 +92,7 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
       <Card label="Move 1–2" kind="move" selected={mode === 'move'} onClick={() => pick('move')} />
       <Card step={recharging ? 'Recharging' : undefined} label="Express" icon="/assets/card-express.png" kind="express"
         selected={mode === 'express'} disabled={recharging}
-        title={recharging ? 'You used Express last round. It is ready again next round.' : 'Up to 4 stops; you can change lines at interchanges'}
+        title={recharging ? 'You used Express last round. It is ready again next round.' : `Up to ${EXPRESS_STOPS} stops; you can change lines at interchanges`}
         onClick={() => pick('express')} />
     </>
   );

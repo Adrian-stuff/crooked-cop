@@ -254,6 +254,9 @@ export function neighbours(stationId: string): string[] {
   return [...new Set(ADJ[stationId].map((n) => n.to))];
 }
 
+// How far an Express card rides.
+export const EXPRESS_STOPS = 5;
+
 // One step of an Express ride. Returns the lines the ride can be on after stepping prev -> st, or
 // null if the step isn't allowed. The ride keeps to its line but may change lines at an interchange.
 export function expressStep(prev: string, st: string, lines: Set<string> | null): Set<string> | null {

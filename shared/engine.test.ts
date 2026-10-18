@@ -51,6 +51,8 @@ describe('movement validation', () => {
     expect(() => validatePath('recto', ['lawton', 'taytay'], false)).not.toThrow();
     expect(() => validatePath('recto', ['lawton', 'taytay'], true)).not.toThrow();
     expect(() => validatePath('recto', ['lawton', 'taytay', 'east_road', 'bgc'], true)).not.toThrow();
+    expect(() => validatePath('recto', ['lawton', 'taytay', 'east_road', 'bgc', 'buendia'], true)).not.toThrow();
+    expect(() => validatePath('legarda', ['recto', 'lawton', 'taytay', 'east_road', 'bgc', 'buendia'], true)).toThrow(/at most 5/);
     expect(() => validatePath('lawton', ['taytay', 'east_road', 'bgc', 'buendia'], true)).not.toThrow();
   });
 });

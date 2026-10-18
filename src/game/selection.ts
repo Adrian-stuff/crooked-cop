@@ -1,4 +1,4 @@
-import { ADJ, STATIONS, distance, expressStep, neighbours } from '../../shared/map';
+import { ADJ, EXPRESS_STOPS, STATIONS, distance, expressStep, neighbours } from '../../shared/map';
 import type { PublicPlayer, View } from '../../shared/types';
 import type { Mark } from '../components/Board';
 
@@ -29,7 +29,7 @@ export function candidates(view: View, mode: Mode, path: string[]): string[] {
     return neighbours(last).filter((s) => !visited.has(s));
   }
   if (mode === 'express') {
-    if (path.length >= 4) return [];
+    if (path.length >= EXPRESS_STOPS) return [];
     const lines = expressLines(here, path);
     return [...new Set(ADJ[last].filter((n) => !visited.has(n.to) && expressStep(last, n.to, lines)).map((n) => n.to))];
   }

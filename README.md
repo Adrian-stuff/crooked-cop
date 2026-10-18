@@ -67,10 +67,10 @@ numbers can be changed in the lobby.
 - **Round**: Heister Phase (60s) → Police Phase (45s per officer) → Information Phase (60s), 15 rounds. A phase
   ends early once everyone in it is done.
 - **Police turn**: officers go **one at a time** in seat order, each with their own timer. Each officer takes
-  **one** action: Move (1–2 stations), Express (up to 4 on one line), Search or Arrest, or passes. The team has
+  **one** action: Move (1–2 stations), Express (up to 5 stops), Search or Arrest, or passes. The team has
   3 arrests per round.
 - **Staying put**: moving is optional for everyone ("Stay put" / just end your turn).
-- **Express**: up to 4 stops; it keeps to its line but may change lines at an interchange, and picks up an
+- **Express**: up to 5 stops; it keeps to its line but may change lines at an interchange, and picks up an
   Artifact only at its final stop. A Heister's Express card
   then recharges for one round (they can't Express two rounds in a row); officers have no cooldown. A normal move picks
   up Artifacts at every station it passes.
