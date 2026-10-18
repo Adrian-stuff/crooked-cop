@@ -11,7 +11,6 @@ export interface Settings {
   infoSeconds: number;
   maxRounds: number;
   artifactCount: number;
-  artifactsToEscape: number;
   heisterCount: 'auto' | 1 | 2;
   searchRange: number; // hops from the officer's station
   allowDMs: boolean;
@@ -24,7 +23,6 @@ export const DEFAULT_SETTINGS: Settings = {
   infoSeconds: 60,
   maxRounds: 15,
   artifactCount: 10,
-  artifactsToEscape: 5,
   heisterCount: 'auto',
   searchRange: 1,
   allowDMs: true,
@@ -50,6 +48,7 @@ export interface Player {
   autoPlaced?: boolean; // placed at random when setup timed out
   cleared?: boolean; // voted on and shown not to be the Crooked Cop
   expressRound?: number; // round a Heister last took the Express
+  afk?: boolean; // let their timer run out without acting; cleared when they act
 }
 
 export interface Envelope {
@@ -59,6 +58,7 @@ export interface Envelope {
   kind: 'search' | 'traitor' | 'clue';
   title: string;
   lines: string[];
+  area?: string[]; // stations a Search covered
 }
 
 export interface LogEntry {
@@ -107,8 +107,9 @@ export interface GameState {
   visits: Visit[];
   pickups: { station: string; round: number }[];
   arrestsThisRound: number;
-  exitStreak: number;
-  exitMustClear: boolean;
+  exits: string[]; // Exit Stations in play this game
+  exitStreak: Record<string, number>; // rounds in a row an officer ended on each exit
+  exitMustClear: string[]; // exits that must be empty of officers at the end of this round
   accusation: Accusation | null;
   accusationUsed: boolean;
   envelopes: Envelope[];
@@ -155,6 +156,7 @@ export interface PublicPlayer {
   acted: 'search' | 'arrest' | null;
   cleared: boolean;
   expressCooldown: boolean; // Heister used Express last round (Heister team and facilitator only)
+  afk: boolean;
 }
 
 export interface View {
@@ -172,8 +174,9 @@ export interface View {
   artifacts: Record<string, number> | null; // only heisters / god / end
   announcedTaken: number;
   arrestsLeft: number;
-  exitMustClear: boolean;
-  exitStreak: number;
+  exits: string[];
+  exitMustClear: string[];
+  exitStreak: Record<string, number>;
   accusation: Accusation | null;
   accusationUsed: boolean;
   envelopes: Envelope[];

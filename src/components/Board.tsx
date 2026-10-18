@@ -1,5 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { LINES, MAP_HEIGHT, MAP_WIDTH, STATIONS, STATION_BY_ID, linesAt, lineName, type LabelSide } from '../../shared/map';
+import { EXIT_STATION, LINES, MAP_HEIGHT, MAP_WIDTH, STATIONS, STATION_BY_ID, linesAt, lineName, type LabelSide } from '../../shared/map';
 import type { PublicPlayer, View } from '../../shared/types';
 import { SPECTATOR_IDENTITY, seatIdentities, tokenText, type Identity } from '../game/identity';
 import { BOARD_PAD as PAD } from '../game/geometry';
@@ -19,6 +19,7 @@ interface Props {
   onFocus?: (id: string | null) => void;
   onPick?: (id: string | null) => void; // a station clicked outside any mode (null: empty board)
   selected?: string | null;
+  swept?: string[]; // stations your Search covered this round
 }
 
 const LABEL_OFFSET: Record<LabelSide, [number, number, 'start' | 'middle' | 'end']> = {
@@ -114,6 +115,12 @@ function Pawn({ p, identity, x, y, station, me, onTurn, focused, dimmed, showTag
               <text y={6} textAnchor="middle" key={p.carried}>{p.carried}</text>
             </g>
           )}
+          {(p.afk || !p.connected) && p.status === 'active' && (
+            <g transform="translate(-26 -26)" className="afk-badge">
+              <rect x={-20} y={-11} width={40} height={22} rx={11} />
+              <text y={6} textAnchor="middle">{p.connected ? 'AFK' : 'OFF'}</text>
+            </g>
+          )}
           {p.status === 'arrested' && (
             <g className="cuffs">
               <circle r={34} className="burst" />
@@ -129,7 +136,7 @@ function Pawn({ p, identity, x, y, station, me, onTurn, focused, dimmed, showTag
           <text y={66} textAnchor="middle" className={me ? 'mine' : ''}>{name}</text>
         </g>
       )}
-      <title>{`${p.name} · ${identity.name}${heister ? ` · ${p.label} Heister` : ''}${p.status !== 'active' ? ` · ${p.status}` : ''}`}</title>
+      <title>{`${p.name} · ${identity.name}${heister ? ` · ${p.label} Heister` : ''}${p.status !== 'active' ? ` · ${p.status}` : ''}${p.afk ? ' · AFK' : ''}${p.connected ? '' : ' · offline'}`}</title>
     </g>
   );
 }
@@ -200,8 +207,9 @@ function ArtifactLayer({ artifacts }: { artifacts: Record<string, number> | null
   );
 }
 
-export function Board({ view, marks = {}, onStation, showTrails, showNames = true, focus = null, onFocus, onPick, selected = null }: Props) {
+export function Board({ view, marks = {}, onStation, showTrails, showNames = true, focus = null, onFocus, onPick, selected = null, swept = [] }: Props) {
   const ids = useMemo(() => seatIdentities(view?.players ?? []), [view?.players]);
+  const exits = view?.exits ?? [EXIT_STATION];
 
   // Pawns in player order (yours last, so it draws on top), fanned out around shared stations.
   const pawns = useMemo(() => {
@@ -265,7 +273,8 @@ export function Board({ view, marks = {}, onStation, showTrails, showNames = tru
             onClick={() => (mark ? onStation?.(st.id) : onPick?.(st.id))}>
             {mark && <circle key={mark} cx={st.x} cy={st.y} r={31} className="mark-ring" />}
             {selected === st.id && <circle cx={st.x} cy={st.y} r={36} className="selected-ring" />}
-            {st.exit && <circle cx={st.x} cy={st.y} r={30} fill="none" stroke="#f7e11b" strokeWidth={8} className="exit-ring" />}
+            {swept.includes(st.id) && <circle cx={st.x} cy={st.y} r={28} className="swept-ring" />}
+            {exits.includes(st.id) && <circle cx={st.x} cy={st.y} r={30} fill="none" stroke="#f7e11b" strokeWidth={8} className="exit-ring" />}
             {st.interchange ? (
               <>
                 <circle cx={st.x} cy={st.y} r={24} fill="#fff" />
@@ -278,7 +287,7 @@ export function Board({ view, marks = {}, onStation, showTrails, showNames = tru
             <text x={st.x + dx * (st.major ? 1.15 : 1)} y={st.y + dy} textAnchor={anchor}
               className={st.major ? 'st-label major' : 'st-label'}>{st.name.toUpperCase()}</text>
             <circle cx={st.x} cy={st.y} r={30} fill="transparent" />
-            <title>{`${st.name} · ${linesAt(st.id).map(lineName).join(', ')} line${linesAt(st.id).length > 1 ? 's' : ''}${st.exit ? ' · EXIT STATION' : ''}${occ ? `\n${occ}` : ''}`}</title>
+            <title>{`${st.name} · ${linesAt(st.id).map(lineName).join(', ')} line${linesAt(st.id).length > 1 ? 's' : ''}${exits.includes(st.id) ? ' · EXIT STATION' : ''}${occ ? `\n${occ}` : ''}`}</title>
           </g>
         );
       })}

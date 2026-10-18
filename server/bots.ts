@@ -2,7 +2,7 @@
 // Usage: npm run bots -- <ROOM> [count]
 
 import WebSocket from 'ws';
-import { ADJ, EXIT_STATION, STATIONS, neighbours } from '../shared/map';
+import { ADJ, STATIONS, neighbours } from '../shared/map';
 import type { ClientMsg, ServerMsg } from '../shared/protocol';
 import type { Action, View } from '../shared/types';
 
@@ -85,7 +85,7 @@ function play(v: View, send: (m: ClientMsg) => void) {
   const officer = v.myRole === 'police' || v.myRole === 'traitor';
 
   if (v.phase === 'setup' && !me.done) {
-    if (!me.station) act({ type: 'chooseStart', station: rnd(STATIONS.filter((s) => !s.exit)).id });
+    if (!me.station) act({ type: 'chooseStart', station: rnd(STATIONS.filter((s) => !v.exits.includes(s.id))).id });
     else act({ type: 'ready' });
   } else if (v.phase === 'heister' && v.myRole === 'heister' && !me.done && me.station) {
     const step1 = rnd(neighbours(me.station));
@@ -93,9 +93,9 @@ function play(v: View, send: (m: ClientMsg) => void) {
     act({ type: 'move', path: Math.random() < 0.5 && step2 ? [step1, step2] : [step1], express: false });
   } else if (v.phase === 'police' && officer && !me.done && me.station && v.policeTurn === me.id) {
     // One action per turn: sometimes arrest, otherwise search a neighbour (which moves there) or just move.
-    const near = neighbours(me.station).filter((s) => s !== EXIT_STATION || !v.exitMustClear);
+    const near = neighbours(me.station).filter((s) => !v.exitMustClear.includes(s));
     if (Math.random() < 0.15 && !me.cannotArrest && v.arrestsLeft > 0) {
-      act({ type: 'arrest', station: rnd(ADJ[me.station].map((n) => n.to).filter((s) => s !== EXIT_STATION)) });
+      act({ type: 'arrest', station: rnd(ADJ[me.station].map((n) => n.to).filter((s) => !v.exits.includes(s))) });
     } else if (Math.random() < 0.6 && v.settings.searchRange > 0) {
       act({ type: 'search', station: rnd(near) });
     } else {

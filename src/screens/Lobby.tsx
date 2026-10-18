@@ -1,4 +1,5 @@
-import { heisterCountFor, MAX_PLAYERS, MIN_PLAYERS } from '../../shared/engine';
+import { escapeTarget, heisterCountFor, MAX_PLAYERS, MIN_PLAYERS } from '../../shared/engine';
+import { exitsFor, stationLabel } from '../../shared/map';
 import type { Settings, View } from '../../shared/types';
 import { Chat } from '../components/Chat';
 import { TopBar } from '../components/Panels';
@@ -55,7 +56,8 @@ export function Lobby({ game, view }: { game: Game; view: View }) {
 
           <div className="role-split">
             {canStart
-              ? <>With {n} players: <strong>{h} Heister{h > 1 ? 's' : ''}</strong>, <strong>{n - h} Police</strong>, and one of the Police is secretly the <strong>Crooked Cop</strong>. Roles are dealt at random.</>
+              ? <>With {n} players: <strong>{h} Heister{h > 1 ? 's' : ''}</strong>, <strong>{n - h} Police</strong>, and one of the Police is secretly the <strong>Crooked Cop</strong>. Roles are dealt at random.{' '}
+                {exitsFor(n).length > 1 ? <>Two Exit Stations: <strong>{exitsFor(n).map(stationLabel).join(' and ')}</strong>.</> : <>One Exit Station: <strong>{stationLabel(exitsFor(n)[0])}</strong>.</>}</>
               : n < MIN_PLAYERS ? `Need ${MIN_PLAYERS - n} more player${MIN_PLAYERS - n > 1 ? 's' : ''} to start.` : 'Too many players are seated.'}
           </div>
 
@@ -72,7 +74,7 @@ export function Lobby({ game, view }: { game: Game; view: View }) {
           {num('infoSeconds', 'Information Phase', 10, 600, 'sec')}
           {num('setupSeconds', 'Setup', 10, 600, 'sec')}
           {num('artifactCount', 'Artifacts hidden', 1, 30)}
-          {num('artifactsToEscape', 'Needed to escape', 1, 30)}
+          <p className="hint">A Heister escapes with {escapeTarget(view.settings)} (half of the Artifacts).</p>
           {num('searchRange', 'Search range', 0, 3, 'stops')}
           <label className="field inline">
             <span>Heisters with 6–7 players</span>

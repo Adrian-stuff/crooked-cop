@@ -4,7 +4,7 @@
 // It runs the same in the Node dev server and in a Supabase edge function.
 
 import {
-  ADJ, EXIT_STATION, STATIONS, distance, isAdjacent, lineName, linesAt, stationLabel,
+  ADJ, EXIT_STATION, STATIONS, STATION_BY_ID, distance, exitsFor, expressStep, isAdjacent, lineName, linesAt, searchArea, stationLabel,
 } from './map.ts';
 import {
   DEFAULT_SETTINGS, type Action, type Envelope, type GameState, type LogEntry, type Player,
@@ -16,6 +16,12 @@ export class GameError extends Error {}
 const fail = (msg: string): never => {
   throw new GameError(msg);
 };
+
+// A Heister escapes once they carry half of all the Artifacts (rounded up).
+export const escapeTarget = (s: Settings) => Math.ceil(s.artifactCount / 2);
+
+// An officer who is AFK or offline gets this long for their Police turn, so they don't hold up the table.
+export const AFK_TURN_SECONDS = 15;
 
 export const MIN_PLAYERS = 4;
 export const MAX_PLAYERS = 8;
@@ -52,7 +58,7 @@ export function createGame(code: string, hostId: string, hostName: string, seed:
   return {
     code, rng: seed | 0, settings: { ...DEFAULT_SETTINGS }, phase: 'lobby', round: 0, deadline: null,
     players: [blankPlayer(hostId, hostName, true)], artifacts: {}, announcedTaken: 0, visits: [],
-    pickups: [], arrestsThisRound: 0, exitStreak: 0, exitMustClear: false, accusation: null,
+    pickups: [], arrestsThisRound: 0, exits: [EXIT_STATION], exitStreak: {}, exitMustClear: [], accusation: null,
     accusationUsed: false, envelopes: [], log: [], winner: null, endReason: null, trails: {}, nextId: 1,
     policeTurn: null, reveal: null, tipoff: null,
   };
@@ -121,8 +127,14 @@ function log(g: GameState, kind: LogEntry['kind'], text: string) {
   g.log.push({ id: g.nextId++, round: g.round, kind, text: tidy(text) });
 }
 
-function envelope(g: GameState, to: string, kind: Envelope['kind'], title: string, lines: string[]) {
-  g.envelopes.push({ id: `e${g.nextId++}`, to, round: g.round, kind, title, lines: lines.map(tidy) });
+function markAfk(g: GameState, p: Player) {
+  if (p.afk) return;
+  p.afk = true;
+  log(g, 'info', `${p.name} is AFK (ran out of time).`);
+}
+
+function envelope(g: GameState, to: string, kind: Envelope['kind'], title: string, lines: string[], area?: string[]) {
+  g.envelopes.push({ id: `e${g.nextId++}`, to, round: g.round, kind, title, lines: lines.map(tidy), ...(area && { area }) });
 }
 
 function plural(n: number, word: string) {
@@ -152,10 +164,7 @@ export function validatePath(from: string, path: string[], express: boolean): vo
     if (seen.has(st)) fail('A move cannot visit the same station twice.');
     if (!isAdjacent(prev, st)) fail('Stations must be connected by a line.');
     if (express) {
-      const shared = new Set(ADJ[prev].filter((n) => n.to === st).map((n) => n.line));
-      const next: Set<string> = lines ? new Set([...lines].filter((l) => shared.has(l))) : shared;
-      if (next.size === 0) fail('Express must stay on one line.');
-      lines = next;
+      lines = expressStep(prev, st, lines) ?? fail('Express can only change lines at an interchange.');
     }
     seen.add(st);
     prev = st;
@@ -178,14 +187,15 @@ function startGame(g: GameState, t: number) {
     if (p.wantsSpectate) p.role = 'spectator';
     Object.assign(p, {
       status: 'active', station: null, carried: 0, done: false, moved: false, acted: null,
-      envelopeGiven: false, skipPoliceRound: undefined, noArrestRound: undefined, cleared: false, expressRound: undefined,
+      envelopeGiven: false, skipPoliceRound: undefined, noArrestRound: undefined, cleared: false, expressRound: undefined, afk: false,
     });
   }
-  const candidates = STATIONS.filter((s) => !s.exit).map((s) => s.id);
+  g.exits = exitsFor(seats.length);
+  const candidates = STATIONS.filter((s) => !g.exits.includes(s.id)).map((s) => s.id);
   g.artifacts = {};
   for (const id of shuffle(g, candidates).slice(0, g.settings.artifactCount)) g.artifacts[id] = 1;
   Object.assign(g, {
-    round: 0, visits: [], pickups: [], arrestsThisRound: 0, exitStreak: 0, exitMustClear: false,
+    round: 0, visits: [], pickups: [], arrestsThisRound: 0, exitStreak: {}, exitMustClear: [],
     accusation: null, accusationUsed: false, envelopes: [], log: [], winner: null, endReason: null,
     trails: {}, announcedTaken: 0, policeTurn: null, reveal: null, tipoff: null,
   });
@@ -216,10 +226,13 @@ function collect(g: GameState, p: Player, station: string) {
 }
 
 function finishSetup(g: GameState, t: number) {
-  const free = STATIONS.filter((s) => !s.exit).map((s) => s.id);
+  const free = STATIONS.filter((s) => !g.exits.includes(s.id)).map((s) => s.id);
   for (const p of g.players) {
     if (p.role === 'spectator') continue;
-    if (!p.station) p.autoPlaced = true;
+    if (!p.station) {
+      p.autoPlaced = true;
+      markAfk(g, p);
+    }
     placeAt(g, p, p.station ?? pick(g, free));
   }
   // Officer picks stay hidden from the Heisters until now, so announce them all at once.
@@ -260,7 +273,7 @@ function endHeisterPhase(g: GameState, t: number) {
     p.done = !(isPolice(p) && p.status === 'active') || skipping;
     if (isPolice(p) && p.status === 'active' && skipping) log(g, 'info', `${p.name} sits out this Police Phase (wrong arrest).`);
   }
-  if (g.exitMustClear) log(g, 'info', `Exit rule: ${stationLabel(EXIT_STATION)} must be empty of officers at the end of this round.`);
+  for (const ex of g.exitMustClear) log(g, 'info', `Exit rule: ${stationLabel(ex)} must be empty of officers at the end of this round.`);
   log(g, 'info', 'Police Phase: officers take turns, one action each: Move, Express, Search or Arrest.');
   maybeEndPolicePhase(g, t);
 }
@@ -294,24 +307,27 @@ function maybeEndPolicePhase(g: GameState, t: number) {
   const next = activePolice(g).find((p) => !p.done);
   if (!next) return endPolicePhase(g, t);
   g.policeTurn = next.id;
-  g.deadline = t + g.settings.policeSeconds * 1000;
+  const away = next.afk || !next.connected;
+  g.deadline = t + (away ? Math.min(AFK_TURN_SECONDS, g.settings.policeSeconds) : g.settings.policeSeconds) * 1000;
 }
 
 function endPolicePhase(g: GameState, t: number) {
   for (const p of activePolice(g)) finishPoliceTurn(g, p);
   g.policeTurn = null;
-  if (g.exitMustClear) {
+  for (const ex of g.exitMustClear) {
     for (const p of activePolice(g)) {
-      if (p.station === EXIT_STATION) {
-        const dest = ADJ[EXIT_STATION][0].to;
+      if (p.station === ex) {
+        const dest = ADJ[ex][0].to;
         p.station = dest;
-        log(g, 'info', `${p.name} was moved off ${stationLabel(EXIT_STATION)} to ${stationLabel(dest)} (exit occupancy limit).`);
+        log(g, 'info', `${p.name} was moved off ${stationLabel(ex)} to ${stationLabel(dest)} (exit occupancy limit).`);
       }
     }
   }
-  const atExit = activePolice(g).some((p) => p.station === EXIT_STATION);
-  g.exitStreak = atExit ? g.exitStreak + 1 : 0;
-  g.exitMustClear = g.exitStreak >= 2;
+  // Each exit keeps its own count of rounds in a row with an officer on it.
+  for (const ex of g.exits) {
+    g.exitStreak[ex] = activePolice(g).some((p) => p.station === ex) ? (g.exitStreak[ex] ?? 0) + 1 : 0;
+  }
+  g.exitMustClear = g.exits.filter((ex) => g.exitStreak[ex] >= 2);
   g.phase = 'info';
   g.deadline = t + g.settings.infoSeconds * 1000;
   for (const p of g.players) {
@@ -379,34 +395,55 @@ function fieldClue(g: GameState): string {
   return 'The radio is quiet.';
 }
 
-function searchReport(g: GameState, station: string): string[] {
-  const name = stationLabel(station);
-  const lines: string[] = [];
-  const present = activeHeisters(g).some((h) => h.station === station);
-  lines.push(present ? `A Heister is at ${name} RIGHT NOW.` : `No Heister is at ${name} right now.`);
-  const recent = g.visits
-    .filter((v) => v.station === station && v.round >= g.round - 2 && v.round > 0)
-    .sort((a, b) => b.round - a.round)[0];
-  if (recent) {
-    const ago = g.round - recent.round;
-    lines.push(`A Heister passed through here ${ago === 0 ? 'this round' : `${plural(ago, 'round')} ago`}.`);
-  } else {
-    lines.push('No Heister activity here in the last 2 rounds.');
+// A Search sweeps an area (see searchArea), reporting on every station in it.
+function searchReport(g: GameState, station: string, area: string[]): string[] {
+  const names = (ids: string[]) => ids.map(stationLabel).join(', ');
+  const others = area.filter((s) => s !== station);
+  const lines: string[] = [
+    STATION_BY_ID[station].interchange
+      ? `Swept ${stationLabel(station)} and every stop around it: ${names(others)}.`
+      : `Swept ${stationLabel(station)} and 2 stops each way on the ${linesAt(station).map(lineName).join('/')} line: ${names(others)}.`,
+  ];
+  const here = area.filter((s) => activeHeisters(g).some((h) => h.station === s));
+  lines.push(here.length ? `A Heister is at ${names(here)} RIGHT NOW.` : 'No Heister anywhere in the area right now.');
+  const recent = area
+    .map((s) => g.visits.filter((v) => v.station === s && v.round >= g.round - 2 && v.round > 0).sort((a, b) => b.round - a.round)[0])
+    .filter(Boolean);
+  for (const v of recent) {
+    const ago = g.round - v.round;
+    lines.push(`A Heister passed through ${stationLabel(v.station)} ${ago === 0 ? 'this round' : `${plural(ago, 'round')} ago`}.`);
   }
-  if ((g.artifacts[station] ?? 0) > 0) lines.push('An Artifact is still hidden here.');
-  const taken = g.pickups.filter((p) => p.station === station);
-  for (const p of taken) lines.push(`An Artifact was taken from here ${p.round === 0 ? 'at the start' : `in round ${p.round}`}.`);
-  if (!(g.artifacts[station] > 0) && taken.length === 0) lines.push('No sign of any Artifact here.');
+  if (!recent.length) lines.push('No Heister activity in the area in the last 2 rounds.');
+  const hidden = area.filter((s) => (g.artifacts[s] ?? 0) > 0);
+  if (hidden.length) lines.push(`Artifacts still hidden at ${names(hidden)}.`);
+  const taken = g.pickups.filter((p) => area.includes(p.station));
+  for (const p of taken) lines.push(`An Artifact was taken from ${stationLabel(p.station)} ${p.round === 0 ? 'at the start' : `in round ${p.round}`}.`);
+  if (!hidden.length && !taken.length) lines.push('No sign of any Artifact in the area.');
   lines.push(`Field clue: ${fieldClue(g)}`);
   return lines;
 }
 
 // ---------- Actions ----------
 
+// Brings a game saved before exits, police turns and reveals existed up to the current shape,
+// so a room that was running during a deploy carries on.
+function upgrade(g: GameState): GameState {
+  const old = g as unknown as { exitStreak: unknown; exitMustClear: unknown };
+  g.exits ??= [EXIT_STATION];
+  if (typeof old.exitStreak !== 'object' || old.exitStreak === null) g.exitStreak = { [EXIT_STATION]: Number(old.exitStreak) || 0 };
+  if (!Array.isArray(old.exitMustClear)) g.exitMustClear = old.exitMustClear ? [EXIT_STATION] : [];
+  g.reveal ??= null;
+  g.tipoff ??= null;
+  if (g.policeTurn === undefined) g.policeTurn = null;
+  if (g.phase === 'police' && !g.policeTurn) g.policeTurn = activePolice(g).find((p) => !p.done)?.id ?? null;
+  return g;
+}
+
 export function applyAction(state: GameState, playerId: string, action: Action, t: number): GameState {
-  const g = structuredClone(state);
+  const g = upgrade(structuredClone(state));
   advanceTime(g, t);
   const me = g.players.find((p) => p.id === playerId) ?? fail('You are not in this room.');
+  if (action.type !== 'tick') me.afk = false; // doing anything at all means you're back
 
   switch (action.type) {
     case 'tick':
@@ -423,7 +460,6 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
       s.infoSeconds = clamp(s.infoSeconds, 10, 600);
       s.maxRounds = clamp(s.maxRounds, 1, 50);
       s.artifactCount = clamp(s.artifactCount, 1, 30);
-      s.artifactsToEscape = clamp(s.artifactsToEscape, 1, s.artifactCount);
       s.searchRange = clamp(s.searchRange, 0, 3);
       if (![1, 2, 'auto'].includes(s.heisterCount)) s.heisterCount = 'auto';
       s.allowDMs = !!s.allowDMs;
@@ -458,7 +494,7 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
       if (me.role === 'spectator') fail('Spectators do not take a station.');
       if (me.done) fail('You already locked in your starting station.');
       if (!ADJ[action.station]) fail('Unknown station.');
-      if (me.role === 'heister' && action.station === EXIT_STATION) fail('Heisters cannot start on the Exit Station.');
+      if (me.role === 'heister' && g.exits.includes(action.station)) fail('Heisters cannot start on an Exit Station.');
       me.station = action.station;
       break;
     }
@@ -480,9 +516,9 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
         me.station = action.path[action.path.length - 1];
         g.trails[me.id].push({ round: g.round, station: me.station });
         me.done = true;
-        if (me.station === EXIT_STATION && me.carried >= g.settings.artifactsToEscape) {
+        if (g.exits.includes(me.station) && me.carried >= escapeTarget(g.settings)) {
           me.status = 'escaped';
-          endGame(g, 'heisters', `${heisterTag(me)} escaped through ${stationLabel(EXIT_STATION)} with ${plural(me.carried, 'Artifact')}.`);
+          endGame(g, 'heisters', `${heisterTag(me)} escaped through ${stationLabel(me.station)} with ${plural(me.carried, 'Artifact')}.`);
           break;
         }
         if (activeHeisters(g).every((p) => p.done)) endHeisterPhase(g, t);
@@ -512,7 +548,8 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
         fail(g.settings.searchRange === 0 ? 'You can only search your own station.' : `You can only search within ${plural(g.settings.searchRange, 'stop')} of you.`);
       }
       me.acted = 'search';
-      envelope(g, me.id, 'search', `Search: ${stationLabel(action.station)}`, searchReport(g, action.station));
+      const area = searchArea(action.station);
+      envelope(g, me.id, 'search', `Search: ${stationLabel(action.station)}`, searchReport(g, action.station, area), area);
       // Searching takes the officer to the station they searched.
       const went = me.station !== action.station;
       me.station = action.station;
@@ -531,8 +568,8 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
       if (g.arrestsThisRound >= 3) fail('The team has used all 3 arrest attempts this round.');
       const target = action.station;
       if (!ADJ[target]) fail('Unknown station.');
-      if (target === EXIT_STATION) {
-        if (me.station !== EXIT_STATION) fail('At the Exit Station you can only arrest while standing on it.');
+      if (g.exits.includes(target)) {
+        if (me.station !== target) fail('At an Exit Station you can only arrest while standing on it.');
       } else if (target !== me.station && !isAdjacent(me.station!, target)) {
         fail('You can only arrest at your station or one connected stop away.');
       }
@@ -655,6 +692,7 @@ export function advanceTime(g: GameState, t: number) {
       case 'heister':
         for (const h of activeHeisters(g)) {
           if (!h.done) {
+            markAfk(g, h);
             h.done = true;
             g.trails[h.id].push({ round: g.round, station: h.station! });
             g.visits.push({ heister: h.id, station: h.station!, round: g.round });
@@ -665,7 +703,10 @@ export function advanceTime(g: GameState, t: number) {
       case 'police': {
         // The current officer ran out of time; the next one gets a fresh timer.
         const current = g.players.find((p) => p.id === g.policeTurn);
-        if (current) finishPoliceTurn(g, current);
+        if (current) {
+          if (!current.moved && !current.acted) markAfk(g, current);
+          finishPoliceTurn(g, current);
+        }
         else endPolicePhase(g, t);
         maybeEndPolicePhase(g, t);
         break;
@@ -683,13 +724,15 @@ export function advanceTime(g: GameState, t: number) {
 export function tick(state: GameState, t: number): GameState {
   if (state.deadline === null || t < state.deadline) return state;
   const g = structuredClone(state);
+  upgrade(g);
   advanceTime(g, t);
   return g;
 }
 
 // ---------- Views (the only thing that leaves the server) ----------
 
-export function viewFor(g: GameState, viewerId: string, t: number): View {
+export function viewFor(state: GameState, viewerId: string, t: number): View {
+  const g = upgrade(structuredClone(state));
   const me = g.players.find((p) => p.id === viewerId);
   const myRole = me?.role ?? 'spectator';
   const ended = g.phase === 'ended';
@@ -714,6 +757,7 @@ export function viewFor(g: GameState, viewerId: string, t: number): View {
       moved: p.moved,
       acted: p.acted,
       cleared: !!p.cleared,
+      afk: !!p.afk,
       expressCooldown: p.role === 'heister' && (godView || heisterTeam) && p.expressRound === g.round - 1,
     };
   });
@@ -724,6 +768,7 @@ export function viewFor(g: GameState, viewerId: string, t: number): View {
     artifacts: godView || heisterTeam ? g.artifacts : null,
     announcedTaken: g.announcedTaken,
     arrestsLeft: 3 - g.arrestsThisRound,
+    exits: g.exits,
     exitMustClear: g.exitMustClear,
     exitStreak: g.exitStreak,
     accusation: g.accusation,

@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { EXIT_STATION, stationLabel } from '../../shared/map';
+import { escapeTarget } from '../../shared/engine';
+import { stationLabel } from '../../shared/map';
 import type { Action, View } from '../../shared/types';
 import type { Mode } from '../game/selection';
 
@@ -17,8 +18,8 @@ const isOfficer = (role: string) => role === 'police' || role === 'traitor';
 const HINT: Partial<Record<NonNullable<Mode>, string>> = {
   start: 'Click any station to start there',
   move: 'Pick up to 2 stops on the map',
-  express: 'Ride one line, up to 4 stops',
-  search: "Click a blue-ringed station: you'll go there and search it",
+  express: 'Ride up to 4 stops. Change lines only at interchanges',
+  search: "Click a blue-ringed station: you'll go there and sweep the area around it",
   arrest: "Click a red-ringed station. A wrong arrest costs you next round's Police Phase",
 };
 
@@ -91,7 +92,7 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
       <Card label="Move 1–2" kind="move" selected={mode === 'move'} onClick={() => pick('move')} />
       <Card step={recharging ? 'Recharging' : undefined} label="Express" icon="/assets/card-express.png" kind="express"
         selected={mode === 'express'} disabled={recharging}
-        title={recharging ? 'You used Express last round. It is ready again next round.' : 'Up to 4 stops along one line'}
+        title={recharging ? 'You used Express last round. It is ready again next round.' : 'Up to 4 stops; you can change lines at interchanges'}
         onClick={() => pick('express')} />
     </>
   );
@@ -142,9 +143,9 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
   if (view.phase === 'heister') {
     if (view.myRole !== 'heister') return <Dock title="Heister Phase" sub="The Heisters are moving in secret. Plan your next move in Police chat." />;
     const carry = (
-      <span className="carry-meter" title={`Escape through ${stationLabel(EXIT_STATION)}`}>
+      <span className="carry-meter" title={`Escape through ${view.exits.map(stationLabel).join(' or ')}`}>
         <img src="/assets/artifact.png" alt="" width={20} height={20} />
-        <strong>{me.carried ?? 0}</strong>/{view.settings.artifactsToEscape}
+        <strong>{me.carried ?? 0}</strong>/{escapeTarget(view.settings)}
       </span>
     );
     if (me.done) return <Dock title={`Your move, ${me.label}`} sub="Move locked in. Waiting for your partner…">{carry}</Dock>;
@@ -172,7 +173,7 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
       return <Dock title="Police Phase" sub={<>Officers go one at a time. {up ? <><strong>{up.name}</strong> is taking their turn.</> : ''} You're up soon.</>} />;
     }
     const noArrest = me.cannotArrest || view.arrestsLeft <= 0;
-    const warn = view.exitMustClear ? `Exit rule: no officer may end this round on ${stationLabel(EXIT_STATION)}`
+    const warn = view.exitMustClear.length ? `Exit rule: no officer may end this round on ${view.exitMustClear.map(stationLabel).join(' or ')}`
       : me.cannotArrest ? 'You were wrongly accused: no arrests for you this round' : null;
     return (
       <Dock title="Your turn, Officer" hint={hint ?? warn ?? 'Click any station for options'}

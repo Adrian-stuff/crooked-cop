@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { addPlayer, applyAction, createGame, validatePath, viewFor, GameError } from './engine';
-import { ADJ, EDGES, EXIT_STATION, STATIONS, distance } from './map';
+import { AFK_TURN_SECONDS, addPlayer, applyAction, createGame, validatePath, viewFor, GameError } from './engine';
+import { canPost } from './chat';
+import { ADJ, EDGES, EXIT_STATION, SECOND_EXIT, STATIONS, distance, searchArea } from './map';
 import type { Action, GameState } from './types';
 
 const T0 = 1_000_000;
@@ -45,10 +46,11 @@ describe('movement validation', () => {
     expect(() => validatePath('lawton', ['recto', 'senate_deped', 'legarda'], false)).toThrow(GameError);
     expect(() => validatePath('lawton', ['guadalupe'], false)).toThrow(GameError);
   });
-  it('lets a normal move transfer lines but Express must stay on one line', () => {
-    // lawton -> taytay is Orange, lawton -> recto is Purple
+  it('lets Express change lines only at an interchange', () => {
+    // lawton -> taytay is Orange, lawton -> recto is Purple; Lawton is an interchange
     expect(() => validatePath('recto', ['lawton', 'taytay'], false)).not.toThrow();
-    expect(() => validatePath('recto', ['lawton', 'taytay'], true)).toThrow(/one line/);
+    expect(() => validatePath('recto', ['lawton', 'taytay'], true)).not.toThrow();
+    expect(() => validatePath('recto', ['lawton', 'taytay', 'east_road', 'bgc'], true)).not.toThrow();
     expect(() => validatePath('lawton', ['taytay', 'east_road', 'bgc', 'buendia'], true)).not.toThrow();
   });
 });
@@ -322,5 +324,105 @@ describe('heister express', () => {
     g = act(g, h.id, { type: 'move', path: ['bgc'], express: false }, t);
     while (g.phase !== 'heister' || g.round !== 3) g = act(g, h.id, { type: 'tick' }, (t += 61_000));
     expect(() => act(g, h.id, { type: 'move', path: ['east_road'], express: true }, t)).not.toThrow();
+  });
+});
+
+describe('spectator chat', () => {
+  it('keeps spectators quiet during play, except the facilitator in All', () => {
+    let g = createGame('ABCD', 'p0', 'Host', 7);
+    for (let i = 1; i < 6; i++) g = addPlayer(g, `p${i}`, `Player${i}`);
+    g = applyAction(g, 'p5', { type: 'spectate', on: true }, T0);
+    g = applyAction(g, 'p0', { type: 'spectate', on: true }, T0);
+    expect(canPost(g, 'p5', 'lobby')).toBeNull(); // the lobby is open to everyone
+    g = applyAction(g, 'p0', { type: 'start' }, T0);
+    expect(canPost(g, 'p5', 'lobby')).toMatch(/Spectators can watch/);
+    expect(canPost(g, 'p0', 'lobby')).toBeNull();
+    expect(canPost(g, 'p0', 'police')).toMatch(/Spectators can watch/);
+    expect(canPost(g, 'p1', 'lobby')).toBeNull();
+  });
+});
+
+describe('exits', () => {
+  it('opens Clark Airport as a second exit for 7-8 players', () => {
+    expect(setup(6).exits).toEqual([EXIT_STATION]);
+    const g8 = setup(8);
+    expect(g8.exits).toEqual([EXIT_STATION, SECOND_EXIT]);
+    expect(g8.artifacts[SECOND_EXIT]).toBeUndefined();
+    const [h] = byRole(g8, 'heister');
+    expect(() => act(g8, h.id, { type: 'chooseStart', station: SECOND_EXIT })).toThrow(/Exit Station/);
+  });
+
+  it('lets a Heister escape through the second exit with half the Artifacts', () => {
+    let g = setup(8);
+    const [h] = byRole(g, 'heister');
+    const next = ADJ[SECOND_EXIT][0].to;
+    g = placeAll(g, { [h.id]: next });
+    g.players.find((p) => p.id === h.id)!.carried = 5; // half of 10
+    g = act(g, h.id, { type: 'move', path: [SECOND_EXIT], express: false });
+    expect(g.winner).toBe('heisters');
+    expect(g.endReason).toMatch(/Clark Airport/);
+  });
+
+  it('needs half the Artifacts, rounded up, to escape', () => {
+    let g = setup(4);
+    g.settings.artifactCount = 7;
+    const [h] = byRole(g, 'heister');
+    g = placeAll(g, { [h.id]: 'carriedo_g' });
+    g.players.find((p) => p.id === h.id)!.carried = 3;
+    g = act(g, h.id, { type: 'move', path: [EXIT_STATION], express: false });
+    expect(g.phase).not.toBe('ended'); // 3 of 7 is short of 4
+  });
+
+  it('carries on a game saved before exits were per game', () => {
+    let g = placeAll(setup(4));
+    const old = g as unknown as Record<string, unknown>;
+    delete old.exits;
+    old.exitStreak = 1;
+    old.exitMustClear = false;
+    expect(() => (g = act(g, g.players[0].id, { type: 'tick' }))).not.toThrow();
+    expect(g.exits).toEqual([EXIT_STATION]);
+  });
+});
+
+describe('afk', () => {
+  it('marks a player AFK when their turn times out, shortens their next turn, and clears on any action', () => {
+    let g = placeAll(setup(6));
+    let t = T0;
+    for (const h of byRole(g, 'heister')) g = act(g, h.id, { type: 'endTurn' }, t);
+    const first = g.policeTurn!;
+    g = act(g, first, { type: 'tick' }, (t = g.deadline! + 1));
+    expect(g.players.find((p) => p.id === first)!.afk).toBe(true);
+    expect(viewFor(g, first, t).players.find((p) => p.id === first)!.afk).toBe(true);
+    expect(g.log.some((e) => e.text.endsWith('is AFK (ran out of time).'))).toBe(true);
+
+    // Next round, the AFK officer's turn is short.
+    while (!(g.phase === 'police' && g.round === 2)) {
+      const h = byRole(g, 'heister').find((x) => g.phase === 'heister' && !g.players.find((p) => p.id === x.id)!.done);
+      g = h ? act(g, h.id, { type: 'endTurn' }, t) : act(g, first, { type: 'tick' }, (t = g.deadline! + 1));
+    }
+    while (g.policeTurn !== first) g = act(g, g.policeTurn!, { type: 'endTurn' }, t);
+    expect(g.deadline).toBe(t + AFK_TURN_SECONDS * 1000);
+    g = act(g, first, { type: 'endTurn' }, t);
+    expect(g.players.find((p) => p.id === first)!.afk).toBe(false);
+  });
+});
+
+describe('search area', () => {
+  it('covers every neighbour at an interchange and 2 stops each way on a plain station', () => {
+    expect(new Set(searchArea('lawton'))).toEqual(new Set(['lawton', 'recto', 'tutuban', 'taytay']));
+    expect(new Set(searchArea('recto'))).toEqual(new Set(['recto', 'senate_deped', 'legarda', 'lawton', 'tutuban']));
+  });
+
+  it('reports Heisters anywhere in the swept area', () => {
+    let g = setup(4);
+    const [h] = byRole(g, 'heister');
+    const cop = g.players.find((p) => p.role === 'police' || p.role === 'traitor')!;
+    g = placeAll(g, { [h.id]: 'legarda', [cop.id]: 'senate_deped' });
+    for (const x of byRole(g, 'heister')) g = act(g, x.id, { type: 'endTurn' });
+    while (g.policeTurn !== cop.id) g = act(g, g.policeTurn!, { type: 'endTurn' });
+    g = act(g, cop.id, { type: 'search', station: 'recto' }); // Legarda is 2 stops from Recto on its line
+    const env = viewFor(g, cop.id, T0).envelopes.at(-1)!;
+    expect(env.area).toContain('legarda');
+    expect(env.lines.join(' ')).toMatch(/A Heister is at Legarda RIGHT NOW/);
   });
 });

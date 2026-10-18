@@ -28,6 +28,10 @@ export function canRead(g: GameState, playerId: string, channel: string): boolea
 export function canPost(g: GameState, playerId: string, channel: string): string | null {
   const p = g.players.find((x) => x.id === playerId);
   if (!p) return 'You are not in this room.';
+  // Spectators watch in silence during play; the facilitator (host) may still post to everyone.
+  if (p.role === 'spectator' && g.phase !== 'lobby' && g.phase !== 'ended' && !(hostGod(p, g) && channel === 'lobby')) {
+    return 'Spectators can watch but not chat during the game.';
+  }
   if (channel === 'lobby') return null;
   if (g.phase === 'lobby') return 'Team chats open when the game starts.';
   if (channel === 'police') {

@@ -26,6 +26,12 @@ export interface Line {
 export const MAP_WIDTH = 1920;
 export const MAP_HEIGHT = 1080;
 export const EXIT_STATION = 'central_terminal';
+export const SECOND_EXIT = 'clark_airport';
+
+// Bigger tables get a second way out: Clark Airport, at the far end of the Red line.
+export function exitsFor(seats: number): string[] {
+  return seats >= 7 ? [EXIT_STATION, SECOND_EXIT] : [EXIT_STATION];
+}
 
 const s = (
   id: string,
@@ -246,6 +252,39 @@ export function isAdjacent(a: string, b: string, line?: string): boolean {
 
 export function neighbours(stationId: string): string[] {
   return [...new Set(ADJ[stationId].map((n) => n.to))];
+}
+
+// One step of an Express ride. Returns the lines the ride can be on after stepping prev -> st, or
+// null if the step isn't allowed. The ride keeps to its line but may change lines at an interchange.
+export function expressStep(prev: string, st: string, lines: Set<string> | null): Set<string> | null {
+  const shared = new Set(ADJ[prev].filter((n) => n.to === st).map((n) => n.line));
+  if (!shared.size) return null;
+  if (!lines) return shared;
+  const stay = new Set([...lines].filter((l) => shared.has(l)));
+  if (stay.size) return stay;
+  return STATION_BY_ID[prev].interchange ? shared : null;
+}
+
+// The stations a Search covers. At an interchange: every station one stop away, on any line.
+// Elsewhere: up to two stops in both directions along the station's own line.
+export function searchArea(station: string): string[] {
+  if (STATION_BY_ID[station]?.interchange) return [station, ...neighbours(station)];
+  const lines = new Set(linesAt(station));
+  const seen = new Set([station]);
+  let frontier = [station];
+  for (let hop = 0; hop < 2; hop++) {
+    const next: string[] = [];
+    for (const s of frontier) {
+      for (const n of ADJ[s]) {
+        if (lines.has(n.line) && !seen.has(n.to)) {
+          seen.add(n.to);
+          next.push(n.to);
+        }
+      }
+    }
+    frontier = next;
+  }
+  return [...seen];
 }
 
 // BFS hop distances from a station.

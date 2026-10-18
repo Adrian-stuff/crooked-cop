@@ -556,3 +556,15 @@ input, select {
 .tipoff-tag { fill: #2a0d0de6; stroke: #ff4d4d; stroke-width: 2; }
 .tipoff-tag-text { font-family: var(--display); font-size: 15px; fill: #ffb3b3; }
 .tip-meta { color: #ff7b7b; }
+
+.chat-muted { margin: 0; padding: 10px 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); font-style: italic; }
+
+/* ---------- AFK ---------- */
+.tag.afk { background: #5a4613; color: #ffd87a; margin-left: 6px; vertical-align: 1px; }
+.waiting-token.afk { filter: grayscale(0.8); opacity: 0.5; }
+.afk-note { font-size: 12px; color: #ffd87a; background: #3a2e0e; border: 1px solid #5a4613; padding: 3px 10px; border-radius: 999px; }
+.afk-badge rect { fill: #3a2e0e; stroke: #ffd87a; stroke-width: 2; }
+.afk-badge text { font-family: var(--display); font-size: 14px; fill: #ffd87a; }
+.afk-badge { animation: bump 0.4s cubic-bezier(0.2, 1.6, 0.4, 1) backwards; }
+
+.swept-ring { fill: #4aa3ff33; stroke: var(--search); stroke-width: 3; pointer-events: none; animation: ring-in 0.4s ease-out; }

@@ -19,6 +19,8 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
   const [focus, setFocus] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const ids = useMemo(() => seatIdentities(view.players), [view.players]);
+  // Keep the area your Search swept lit up for the rest of the round.
+  const swept = view.envelopes.filter((e) => e.kind === 'search' && e.to === view.me && e.round === view.round).at(-1)?.area;
 
   // Reset any half-built selection when the phase changes.
   useEffect(() => {
@@ -59,7 +61,7 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
             <div className="board-scroll">
               <div className="board-stage">
                 <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails}
-                  showNames={showNames} focus={focus} onFocus={setFocus} selected={picked}
+                  showNames={showNames} focus={focus} onFocus={setFocus} selected={picked} swept={swept}
                   onPick={(id) => setPicked(mode || id === picked ? null : id)} />
                 {picked && !mode && (
                   <StationPopover view={view} station={picked} ids={ids} act={game.act} onClose={() => setPicked(null)} />

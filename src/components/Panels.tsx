@@ -69,12 +69,15 @@ export function StatusStrip({ view, offset, ids }: { view: View; offset: number;
         <span className="waiting">
           <span className="muted">{label}</span>
           {waiting.map((p) => (
-            <span key={p.id} title={p.name}
-              className={`waiting-token ${p.id === view.me ? 'me' : ''} ${view.phase === 'police' && p.id === view.policeTurn ? 'current' : view.phase === 'police' ? 'queued' : ''}`}>
+            <span key={p.id} title={p.afk ? `${p.name} (AFK)` : p.name}
+              className={`waiting-token ${p.afk || !p.connected ? 'afk' : ''} ${p.id === view.me ? 'me' : ''} ${view.phase === 'police' && p.id === view.policeTurn ? 'current' : view.phase === 'police' ? 'queued' : ''}`}>
               <TokenIcon role={p.role} identity={ids[p.id] ?? SPECTATOR_IDENTITY} text={tokenText(p)} size={24} />
             </span>
           ))}
         </span>
+      )}
+      {view.players.find((p) => p.id === view.me)?.afk && (
+        <span className="afk-note" role="status">You're marked AFK. Take any action to clear it.</span>
       )}
       {waiting.length === 0 && view.phase !== 'ended' && (
         <span className="waiting muted">Everyone is done</span>
@@ -106,7 +109,8 @@ export function PlayerList({ view, ids, focus, setFocus }: PlayerListProps) {
               onClick={() => setFocus(focus === p.id ? null : p.id)} title={`${id.name} token`}>
               <TokenIcon role={p.role} identity={id} text={tokenText(p)} size={34} />
               <span className="pname">{p.name}{p.id === view.me && <em> (you)</em>}{p.isHost && <span title="Host"> ★</span>}
-                {p.cleared && <span className="tag cleared" title="A vote showed this officer is not the Crooked Cop">Cleared</span>}</span>
+                {p.cleared && <span className="tag cleared" title="A vote showed this officer is not the Crooked Cop">Cleared</span>}
+                {p.afk && <span className="tag afk" title="Ran out of time without acting. Clears when they act.">AFK</span>}</span>
               {roleBadge(p)}
               <span className="pmeta">
                 {p.station ? stationLabel(p.station)
@@ -247,7 +251,7 @@ const ROLE_COPY = {
   heister: {
     img: '/assets/role-heister.png',
     title: 'You are a Heister',
-    body: 'Everyone knows who you are, but not where you are. Grab at least 5 Artifacts and escape through Central Terminal before round 15.',
+    body: 'Everyone knows who you are, but not where you are. Grab at least half of the Artifacts and escape through an Exit Station before time runs out.',
   },
   traitor: {
     img: '/assets/role-crooked.png',

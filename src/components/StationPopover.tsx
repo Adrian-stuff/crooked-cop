@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { EXIT_STATION, LINES, STATION_BY_ID, linesAt, stationLabel } from '../../shared/map';
+import { LINES, STATION_BY_ID, linesAt, searchArea, stationLabel } from '../../shared/map';
 import type { Action, View } from '../../shared/types';
 import { stationPercent } from '../game/geometry';
 import { SPECTATOR_IDENTITY, tokenText, type Identity } from '../game/identity';
@@ -54,7 +54,9 @@ function choices(view: View, id: string): Choice[] {
 
   if (view.phase === 'police' && officer && myTurn && !me.done && !me.acted && !me.moved) {
     if (canTarget(view, 'search', id)) {
-      out.push({ key: 'search', label: 'Search here', note: me.station === id ? 'Sealed envelope with what you find' : 'Go there and open a sealed envelope', kind: 'search', action: { type: 'search', station: id } });
+      const area = searchArea(id).length - 1;
+      const sweep = STATION_BY_ID[id].interchange ? `every stop around it (${area})` : `2 stops each way on its line (${area})`;
+      out.push({ key: 'search', label: 'Search here', note: `${me.station === id ? 'Sweeps' : 'Go there and sweep'} this station and ${sweep}`, kind: 'search', action: { type: 'search', station: id } });
     }
     if (canTarget(view, 'arrest', id) && !me.cannotArrest && view.arrestsLeft > 0) {
       out.push({ key: 'arrest', label: 'Arrest here', note: `Wrong arrest: you sit out next round · ${view.arrestsLeft} left`, kind: 'arrest', action: { type: 'arrest', station: id } });
@@ -65,11 +67,11 @@ function choices(view: View, id: string): Choice[] {
 
 export function StationPopover({ view, station, ids, act, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
-  const st = STATION_BY_ID[station];
   const { left, top } = stationPercent(station);
   const options = choices(view, station);
   const here = view.players.filter((p) => p.station === station && p.role !== 'spectator' && p.status !== 'escaped');
   const artifacts = view.artifacts?.[station] ?? 0;
+  const isExit = view.exits.includes(station);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -95,9 +97,9 @@ export function StationPopover({ view, station, ids, act, onClose }: Props) {
         </div>
         <button className="pop-close" onClick={onClose} aria-label="Close">×</button>
       </header>
-      {(st.exit || here.length > 0 || artifacts > 0) && (
+      {(isExit || here.length > 0 || artifacts > 0) && (
         <div className="pop-facts">
-          {station === EXIT_STATION && <span className="pop-exit">Exit station</span>}
+          {isExit && <span className="pop-exit">Exit station</span>}
           {artifacts > 0 && <span><img src="/assets/artifact.png" alt="" width={16} height={16} /> {artifacts} Artifact{artifacts > 1 ? 's' : ''}</span>}
           {here.map((p) => (
             <span key={p.id} className="pop-who">

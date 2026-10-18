@@ -53,6 +53,9 @@ export function Chat({ view, messages, say }: Props) {
     setText('');
   };
 
+  // Matches canPost on the server: spectators are silent in play, the facilitator may post to All.
+  const muted = view.myRole === 'spectator' && inGame && view.phase !== 'ended' && !(view.godView && current === 'lobby');
+
   const placeholder = current === 'police'
     ? (view.myRole === 'traitor' ? 'Message the team… (they trust you)' : 'Message the Police team…')
     : current === 'heisters' ? 'Plan with your partner…'
@@ -87,11 +90,15 @@ export function Chat({ view, messages, say }: Props) {
           </div>
         ))}
       </div>
-      <form className="chat-form" onSubmit={submit}>
-        <input value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} maxLength={500}
-          aria-label="Chat message" />
-        <button className="btn primary" type="submit">Send</button>
-      </form>
+      {muted ? (
+        <p className="chat-muted">{view.godView ? 'As facilitator you can post in All only.' : 'Spectators can watch but not chat during the game.'}</p>
+      ) : (
+        <form className="chat-form" onSubmit={submit}>
+          <input value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} maxLength={500}
+            aria-label="Chat message" />
+          <button className="btn primary" type="submit">Send</button>
+        </form>
+      )}
     </section>
   );
 }
