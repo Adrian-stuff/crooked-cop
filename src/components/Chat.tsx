@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { dmChannel, dmParticipants } from '../../shared/chat';
 import type { ChatMessage, View } from '../../shared/types';
-import { seatIdentities } from '../game/identity';
+import { SPECTATOR_IDENTITY, seatIdentities, tokenText } from '../game/identity';
+import { TokenIcon } from './Token';
 
 interface Props {
   view: View;
@@ -83,12 +84,24 @@ export function Chat({ view, messages, say }: Props) {
       </div>
       <div className="chat-list" ref={listRef}>
         {shown.length === 0 && <p className="muted empty">No messages yet.</p>}
-        {shown.map((m) => (
-          <div key={m.id} className={`msg ${m.from === view.me ? 'mine' : ''} ${m.from === 'system' ? 'system' : ''}`}>
-            {m.from !== 'system' && <span className="who" style={ids[m.from] && { color: ids[m.from].color }}>{m.name}</span>}
-            <span className="text">{m.text}</span>
-          </div>
-        ))}
+        {shown.map((m, i) => {
+          // Back-to-back messages from one sender share a single name line.
+          const prev = shown[i - 1];
+          const head = m.from !== 'system' && (!prev || prev.from !== m.from || m.ts - prev.ts > 120_000);
+          const p = view.players.find((x) => x.id === m.from);
+          return (
+            <div key={m.id} className={`msg ${m.from === view.me ? 'mine' : ''} ${m.from === 'system' ? 'system' : ''} ${head ? 'head' : ''}`}>
+              {head && (
+                <div className="msg-head">
+                  {p && <TokenIcon role={p.role} identity={ids[p.id] ?? SPECTATOR_IDENTITY} text={tokenText(p)} size={20} />}
+                  <span className="who" style={ids[m.from] && { color: ids[m.from].color }}>{m.from === view.me ? 'You' : m.name}</span>
+                  <time dateTime={new Date(m.ts).toISOString()}>{new Date(m.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time>
+                </div>
+              )}
+              <div className="text">{m.text}</div>
+            </div>
+          );
+        })}
       </div>
       {muted ? (
         <p className="chat-muted">{view.godView ? 'As facilitator you can post in All only.' : 'Spectators can watch but not chat during the game.'}</p>

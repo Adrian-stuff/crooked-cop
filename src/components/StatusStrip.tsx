@@ -91,9 +91,9 @@ function TeamChips({ view }: { view: View }) {
   if (officer && (view.phase === 'police' || view.phase === 'heister')) {
     chips.push({ key: 'arrests', text: `Arrests ${view.arrestsLeft}/3 left`, title: 'Team arrest attempts left this round' });
   }
-  if (officer && view.phase === 'info') {
-    chips.push(view.accusation ? { key: 'vote', text: 'Vote in progress', tone: 'danger' }
-      : view.accusationUsed ? { key: 'vote', text: 'Vote used this round' } : { key: 'vote', text: 'Vote available' });
+  if (view.phase === 'info' && view.accusation) {
+    const target = view.players.find((p) => p.id === view.accusation!.target)?.name ?? 'an officer';
+    chips.push({ key: 'vote', text: `Voting on ${target}`, tone: 'danger' });
   }
   for (const ex of view.exitMustClear) chips.push({ key: `exit-${ex}`, text: `Clear ${stationLabel(ex)}`, tone: 'danger', title: 'No officer may end this round on this exit' });
   if (me?.skipsPolice) chips.push({ key: 'skip', text: 'You sit out this Police Phase', tone: 'danger' });

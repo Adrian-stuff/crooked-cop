@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AFK_TURN_SECONDS, addPlayer, applyAction, createGame, validatePath, viewFor, GameError } from './engine';
+import { AFK_TURN_SECONDS, addPlayer, clearAfk, applyAction, createGame, validatePath, viewFor, GameError } from './engine';
 import { canPost } from './chat';
 import { ADJ, EDGES, EXIT_STATION, SECOND_EXIT, STATIONS, distance, searchArea } from './map';
 import type { Action, GameState } from './types';
@@ -406,6 +406,13 @@ describe('afk', () => {
     expect(g.deadline).toBe(t + AFK_TURN_SECONDS * 1000);
     g = act(g, first, { type: 'endTurn' }, t);
     expect(g.players.find((p) => p.id === first)!.afk).toBe(false);
+  });
+
+  it('clears AFK when the player chats', () => {
+    const g = placeAll(setup(4));
+    g.players[1].afk = true;
+    expect(clearAfk(g, g.players[1].id).players[1].afk).toBe(false);
+    expect(clearAfk(g, g.players[2].id)).toBe(g); // nothing to clear, same state back
   });
 });
 

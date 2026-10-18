@@ -734,6 +734,14 @@ export function advanceTime(g: GameState, t: number) {
   }
 }
 
+// Chatting counts as being back at the table.
+export function clearAfk(state: GameState, playerId: string): GameState {
+  if (!state.players.find((p) => p.id === playerId)?.afk) return state;
+  const g = structuredClone(state);
+  g.players.find((p) => p.id === playerId)!.afk = false;
+  return g;
+}
+
 export function tick(state: GameState, t: number): GameState {
   if (state.deadline === null || t < state.deadline) return state;
   const g = structuredClone(state);

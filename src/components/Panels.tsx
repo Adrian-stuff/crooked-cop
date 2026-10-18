@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { stationLabel } from '../../shared/map';
 import type { PublicPlayer, View } from '../../shared/types';
 import { ART } from '../game/art';
@@ -180,14 +180,41 @@ export function PhaseBanner({ view }: { view: View }) {
   );
 }
 
+const LOG_GLYPH: Record<string, string> = { info: '•', arrest: '!', fail: '×', accuse: '?', expose: '★', announce: '◆', win: '♛' };
+
+// Player names in a log line, picked out in each player's seat colour.
+function ColoredText({ text, view, ids }: { text: string; view: View; ids: Record<string, Identity> }) {
+  const named = view.players.filter((p) => p.name.trim()).sort((a, b) => b.name.length - a.name.length);
+  if (!named.length) return <>{text}</>;
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${named.map((p) => esc(p.name)).join('|')})`));
+  return (
+    <>
+      {parts.map((part, i) => {
+        const p = named.find((x) => x.name === part);
+        return p ? <strong key={i} style={{ color: (ids[p.id] ?? SPECTATOR_IDENTITY).color }}>{part}</strong> : part;
+      })}
+    </>
+  );
+}
+
 export function Log({ view }: { view: View }) {
+  const ids = seatIdentities(view.players);
   const entries = [...view.log].reverse();
   return (
     <section className="panel log">
       <h3>Dispatch log</h3>
       <ul>
-        {entries.map((e) => (
-          <li key={e.id} className={`log-${e.kind}`}><span className="log-round">R{e.round}</span> {e.text}</li>
+        {entries.map((e, i) => (
+          <Fragment key={e.id}>
+            {(i === 0 || entries[i - 1].round !== e.round) && (
+              <li className="log-head">{e.round === 0 ? 'Setup' : `Round ${e.round}`}</li>
+            )}
+            <li className={`log-${e.kind}`}>
+              <span className="log-glyph" aria-hidden="true">{LOG_GLYPH[e.kind] ?? '•'}</span>
+              <span><ColoredText text={e.text} view={view} ids={ids} /></span>
+            </li>
+          </Fragment>
         ))}
       </ul>
     </section>

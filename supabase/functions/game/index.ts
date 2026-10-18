@@ -4,7 +4,7 @@
 // their own view on a private Realtime topic named after their secret token.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { addPlayer, applyAction, createGame, GameError, kickPlayer, setConnected, tick, viewFor } from './engine/engine.ts';
+import { addPlayer, applyAction, clearAfk, createGame, GameError, kickPlayer, setConnected, tick, viewFor } from './engine/engine.ts';
 import { canPost, canRead } from './engine/chat.ts';
 import type { Action, ChatMessage, GameState } from './engine/types.ts';
 
@@ -235,6 +235,11 @@ async function handle(req: Req) {
       await broadcast(Object.entries(room.tokens)
         .filter(([, pid]) => canRead(room.state, pid, msg.channel))
         .map(([token]) => ({ topic: topicFor(token), event: 'chat', payload: msg })));
+      if (me.afk) {
+        // Chatting counts as being back at the table.
+        const { after } = await mutate(req.code, (r) => ({ state: clearAfk(r.state, playerId), tokens: r.tokens }));
+        await broadcast(viewMessages(after, t));
+      }
       return { msg };
     }
 

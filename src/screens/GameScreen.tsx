@@ -9,6 +9,7 @@ import { StatusStrip } from '../components/StatusStrip';
 import { StationPopover } from '../components/StationPopover';
 import { TokenIcon } from '../components/Token';
 import { SPECTATOR_IDENTITY, seatIdentities } from '../game/identity';
+import { channelKind, channelLabel, useRecentChat } from '../game/recentChat';
 import { unlockSound, useTurnAlert } from '../game/turnAlert';
 import { marksFor, type Mode } from '../game/selection';
 import type { Game } from '../net/useGame';
@@ -30,6 +31,10 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
     try { localStorage.setItem('cc-sound', on ? 'on' : 'off'); } catch { /* private mode */ }
   };
   useTurnAlert(view, sound);
+  // New chat pops up on the map: over the sender's pawn, or in a ticker if you can't see them.
+  const recentChat = useRecentChat(game.chat, game.clockOffset);
+  const onBoard = new Set(view.players.filter((p) => p.station && p.role !== 'spectator' && p.status !== 'escaped').map((p) => p.id));
+  const ticker = recentChat.filter((m) => !onBoard.has(m.from)).slice(-3);
   const ids = useMemo(() => seatIdentities(view.players), [view.players]);
   // Keep the area your Search swept lit up for the rest of the round.
   // Hovering or pinning an envelope's area chip lights that sweep up instead.
@@ -92,8 +97,18 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
             <div className="board-scroll">
               <div className="board-stage">
                 <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails}
-                  showNames={showNames} focus={focus} onFocus={setFocus} selected={picked} swept={swept} lastSeen={lastSeen}
+                  showNames={showNames} focus={focus} onFocus={setFocus} selected={picked} swept={swept} lastSeen={lastSeen} chat={recentChat}
                   onPick={(id) => setPicked(mode || id === picked ? null : id)} />
+                {ticker.length > 0 && (
+                  <div className="chat-ticker" aria-live="polite">
+                    {ticker.map((m) => (
+                      <div key={m.id} className={`tick ${channelKind(m.channel)}`}>
+                        <span className="tick-chan">{channelLabel(m.channel)}</span>
+                        <strong style={{ color: ids[m.from]?.color }}>{m.name}</strong> {m.text}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {picked && !mode && (
                   <StationPopover view={view} station={picked} ids={ids} act={game.act} onClose={() => setPicked(null)} />
                 )}

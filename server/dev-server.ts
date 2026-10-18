@@ -5,7 +5,7 @@
 
 import { randomBytes, randomInt } from 'node:crypto';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { addPlayer, applyAction, createGame, GameError, kickPlayer, setConnected, tick, viewFor } from '../shared/engine';
+import { addPlayer, applyAction, clearAfk, createGame, GameError, kickPlayer, setConnected, tick, viewFor } from '../shared/engine';
 import { canPost, canRead } from '../shared/chat';
 import type { ClientMsg, ServerMsg } from '../shared/protocol';
 import type { ChatMessage, GameState } from '../shared/types';
@@ -153,6 +153,10 @@ function handle(ws: WebSocket, msg: ClientMsg) {
       if (room.chat.length > 2000) room.chat.shift();
       for (const [pid, set] of room.sockets) {
         if (canRead(room.state, pid, m.channel)) for (const s of set) send(s, { t: 'chat', msg: m });
+      }
+      if (me.afk) {
+        room.state = clearAfk(room.state, me.id);
+        broadcast(room);
       }
       return;
     }

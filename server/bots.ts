@@ -14,6 +14,8 @@ if (!code) {
 const URL = process.env.GAME_URL ?? 'ws://localhost:8787';
 const NAMES = ['Bot Dela Cruz', 'Bot Santos', 'Bot Reyes', 'Bot Bautista', 'Bot Garcia', 'Bot Mendoza', 'Bot Ramos'];
 const rnd = <T>(a: T[]) => a[Math.floor(Math.random() * a.length)];
+// Chance an officer bot calls a vote in an Information Phase (BOT_ACCUSE=1 makes them always try).
+const ACCUSE_CHANCE = Number(process.env.BOT_ACCUSE ?? 0.1);
 
 // Online mode (BOTS_ONLINE=1) talks to the Supabase edge function and polls for its view.
 const FN_URL = process.env.SUPABASE_FN_URL ?? 'https://hxoubdwmvrecptxzrzzp.supabase.co/functions/v1/game';
@@ -103,7 +105,10 @@ function play(v: View, send: (m: ClientMsg) => void) {
     }
   } else if (v.phase === 'info') {
     if (v.accusation && officer && v.accusation.votes[me.id] === undefined) act({ type: 'vote', yes: Math.random() < 0.5 });
-    else if (!v.accusation && !me.done) act({ type: 'ready' });
+    else if (!v.accusation && !v.accusationUsed && officer && Math.random() < ACCUSE_CHANCE) {
+      const suspects = v.players.filter((p) => p.id !== me.id && (p.role === 'police' || p.role === 'traitor') && p.status === 'active');
+      if (suspects.length) act({ type: 'accuse', target: rnd(suspects).id });
+    } else if (!v.accusation && !me.done) act({ type: 'ready' });
   }
 }
 

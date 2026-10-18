@@ -1,6 +1,7 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { EXIT_STATION, LINES, MAP_HEIGHT, MAP_WIDTH, STATIONS, STATION_BY_ID, linesAt, lineName, type LabelSide, searchArea } from '../../shared/map';
-import type { PublicPlayer, RoundAction, View } from '../../shared/types';
+import type { ChatMessage, PublicPlayer, RoundAction, View } from '../../shared/types';
+import { channelKind } from '../game/recentChat';
 import { SPECTATOR_IDENTITY, seatIdentities, tokenText, type Identity } from '../game/identity';
 import { BOARD_PAD as PAD } from '../game/geometry';
 import { trackPoints } from '../game/route';
@@ -21,6 +22,7 @@ interface Props {
   selected?: string | null;
   swept?: string[]; // stations your Search covered this round
   lastSeen?: { station: string; round: number }[]; // Heisters your searches spotted recently
+  chat?: ChatMessage[]; // messages from the last few seconds, shown as bubbles over the sender
 }
 
 const LABEL_OFFSET: Record<LabelSide, [number, number, 'start' | 'middle' | 'end']> = {
@@ -150,6 +152,33 @@ function Pawn({ p, identity, x, y, station, me, onTurn, did, focused, dimmed, sh
   );
 }
 
+// Latest message from each sender, as a speech bubble above their pawn.
+function ChatBubbles({ chat, pawns }: { chat: ChatMessage[]; pawns: { p: PublicPlayer; x: number; y: number }[] }) {
+  const latest: Record<string, ChatMessage> = {};
+  for (const m of chat) latest[m.from] = m;
+  return (
+    <g pointerEvents="none">
+      {Object.values(latest).map((m) => {
+        const pawn = pawns.find((d) => d.p.id === m.from);
+        if (!pawn) return null;
+        const text = m.text.length > 38 ? `${m.text.slice(0, 37)}…` : m.text;
+        const w = Math.max(80, text.length * 9.4 + 30);
+        const x = Math.min(Math.max(pawn.x, -PAD + w / 2 + 6), MAP_WIDTH + PAD - w / 2 - 6);
+        const tail = Math.max(-w / 2 + 16, Math.min(w / 2 - 16, pawn.x - x));
+        return (
+          <g key={m.id} transform={`translate(${x} ${pawn.y - 74})`} className={`bubble ${channelKind(m.channel)}`}>
+            <g className="bubble-body">
+              <rect x={-w / 2} y={-20} width={w} height={36} rx={12} />
+              <path d={`M${tail - 9} 15 L${tail} 28 L${tail + 9} 15 Z`} />
+              <text y={4} textAnchor="middle">{text}</text>
+            </g>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 const DID_GLYPH: Record<RoundAction['kind'], string> = { move: '→', search: 'S', arrest: '!', pass: '–' };
 const DID_TEXT: Record<RoundAction['kind'], string> = { move: 'Moved this round', search: 'Searched this round', arrest: 'Tried an arrest this round', pass: 'Passed this round' };
 
@@ -255,7 +284,7 @@ function ArtifactLayer({ artifacts }: { artifacts: Record<string, number> | null
   );
 }
 
-export function Board({ view, marks = {}, onStation, showTrails, showNames = true, focus = null, onFocus, onPick, selected = null, swept = [], lastSeen = [] }: Props) {
+export function Board({ view, marks = {}, onStation, showTrails, showNames = true, focus = null, onFocus, onPick, selected = null, swept = [], lastSeen = [], chat = [] }: Props) {
   const ids = useMemo(() => seatIdentities(view?.players ?? []), [view?.players]);
   const exits = view?.exits ?? [EXIT_STATION];
 
@@ -351,6 +380,8 @@ export function Board({ view, marks = {}, onStation, showTrails, showNames = tru
           showTag={showNames && !crowded} clickable={(!!onStation && !!marks[station]) || !!onPick}
           onClick={() => (marks[station] ? onStation?.(station) : onPick?.(station))} onHover={hover} />
       ))}
+
+      <ChatBubbles chat={chat} pawns={pawns} />
 
       <rect x={-PAD} width={MAP_WIDTH + PAD * 2} height={MAP_HEIGHT} fill="url(#vignette)" pointerEvents="none" />
     </svg>

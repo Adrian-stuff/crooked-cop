@@ -1,8 +1,10 @@
 import { useState, type ReactNode } from 'react';
 import { escapeTarget } from '../../shared/engine';
 import { EXPRESS_STOPS, stationLabel } from '../../shared/map';
-import type { Action, View } from '../../shared/types';
+import type { Action, PublicPlayer, View } from '../../shared/types';
+import { SPECTATOR_IDENTITY, seatIdentities, tokenText } from '../game/identity';
 import type { Mode } from '../game/selection';
+import { TokenIcon } from './Token';
 
 interface Props {
   view: View;
@@ -88,6 +90,7 @@ function RoundRecap({ view }: { view: View }) {
 export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
   const me = view.players.find((p) => p.id === view.me);
   const [accuseTarget, setAccuseTarget] = useState('');
+  const [picking, setPicking] = useState(false);
   if (!me) return null;
   const officer = isOfficer(view.myRole);
   const active = me.status === 'active';
@@ -215,40 +218,90 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
     );
   }
 
-  // Information phase
+  // Information phase: talk, and optionally put one officer to a vote.
   const acc = view.accusation;
   const recap = <RoundRecap view={view} />;
   const officers = view.players.filter((p) => isOfficer(p.role) && p.status === 'active');
-  const target = acc && view.players.find((p) => p.id === acc.target);
-  const yes = acc ? Object.values(acc.votes).filter(Boolean).length : 0;
-  const no = acc ? Object.values(acc.votes).filter((v) => !v).length : 0;
-  return (
-    <Dock title="Information Phase"
-      sub={acc && target
-        ? <><strong>{view.players.find((p) => p.id === acc.by)?.name}</strong> accuses <strong>{target.name}</strong>. Yes {yes} · No {no} of {officers.length}</>
-        : `Compare envelopes in chat. The round ends when everyone is done or the timer runs out.${view.accusationUsed ? " This round's accusation has been used." : ''}`}
-      tone={acc ? 'accusing' : ''} recap={recap}>
-      {acc && officer && (
-        <>
-          <button className={`btn arrest ${acc.votes[me.id] === true ? 'selected' : ''}`} onClick={() => act({ type: 'vote', yes: true })}>Guilty</button>
-          <button className={`btn ${acc.votes[me.id] === false ? 'selected' : ''}`} onClick={() => act({ type: 'vote', yes: false })}>Not guilty</button>
-        </>
-      )}
-      {officer && !acc && !view.accusationUsed && (
-        <>
-          <select value={accuseTarget} onChange={(e) => setAccuseTarget(e.target.value)} aria-label="Officer to accuse">
-            <option value="">Accuse an officer…</option>
-            {officers.filter((p) => p.id !== me.id).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <button className="btn arrest" disabled={!accuseTarget}
-            onClick={() => { act({ type: 'accuse', target: accuseTarget }); setAccuseTarget(''); }}>
-            Call the vote
+  const ids = seatIdentities(view.players);
+  const token = (p: PublicPlayer, size = 28) => <TokenIcon role={p.role} identity={ids[p.id] ?? SPECTATOR_IDENTITY} text={tokenText(p)} size={size} />;
+  const done = (
+    <button className="btn primary" disabled={me.done} onClick={() => act({ type: 'ready' })}>
+      {me.done ? 'Waiting…' : "I'm done talking"}
+    </button>
+  );
+
+  if (acc) {
+    const target = view.players.find((p) => p.id === acc.target)!;
+    const accuser = view.players.find((p) => p.id === acc.by)?.name ?? 'Someone';
+    const yes = officers.filter((o) => acc.votes[o.id] === true).length;
+    const no = officers.filter((o) => acc.votes[o.id] === false).length;
+    const need = Math.floor(officers.length / 2) + 1;
+    const mine = acc.votes[me.id];
+    const tally = (
+      <span className="vote-tally">
+        {officers.map((o) => (
+          <i key={o.id} className={acc.votes[o.id] === true ? 'yes' : acc.votes[o.id] === false ? 'no' : ''}
+            title={`${o.name}: ${acc.votes[o.id] === undefined ? 'not voted' : acc.votes[o.id] ? 'guilty' : 'not guilty'}`} />
+        ))}
+        Guilty {yes} · Not guilty {no} · {need} needed
+      </span>
+    );
+    if (officer && mine === undefined) {
+      return (
+        <Dock tone="deciding" title={<>Is {target.id === me.id ? 'you' : target.name} the Crooked Cop?</>}
+          sub={<>{accuser} called the vote. {tally}</>}>
+          <span className="vote-suspect">{token(target, 44)}</span>
+          <button className="decision guilty" onClick={() => act({ type: 'vote', yes: true })}>
+            <strong>Guilty</strong><small>Remove them if they're the Crooked Cop</small>
           </button>
-        </>
-      )}
-      <button className="btn primary" disabled={me.done} onClick={() => act({ type: 'ready' })}>
-        {me.done ? 'Waiting…' : "I'm done talking"}
-      </button>
+          <button className="decision innocent" onClick={() => act({ type: 'vote', yes: false })}>
+            <strong>Not guilty</strong><small>Keep them on the force</small>
+          </button>
+        </Dock>
+      );
+    }
+    return (
+      <Dock tone="accusing" title={officer ? `You voted ${mine ? 'Guilty' : 'Not guilty'}` : 'Officers are voting'}
+        sub={<>{accuser} accuses <strong>{target.name}</strong>. {tally}</>}>
+        <span className="vote-suspect">{token(target, 36)}</span>
+        {officer && (
+          <button className="btn ghost" onClick={() => act({ type: 'vote', yes: !mine })}>
+            Change to {mine ? 'Not guilty' : 'Guilty'}
+          </button>
+        )}
+      </Dock>
+    );
+  }
+
+  const canAccuse = officer && !view.accusationUsed;
+  if (picking && canAccuse) {
+    const suspects = officers.filter((p) => p.id !== me.id);
+    const chosen = suspects.find((p) => p.id === accuseTarget);
+    return (
+      <Dock title="Who is the Crooked Cop?"
+        sub="Put one officer to a vote. One vote per round; if they're innocent they can't arrest next round.">
+        <div className="suspects">
+          {suspects.map((p) => (
+            <button key={p.id} className={`suspect ${accuseTarget === p.id ? 'selected' : ''}`} aria-pressed={accuseTarget === p.id}
+              onClick={() => setAccuseTarget(p.id)}>
+              {token(p)}<span>{p.name}</span>{p.cleared && <em>cleared</em>}
+            </button>
+          ))}
+        </div>
+        <button className="btn ghost" onClick={() => { setPicking(false); setAccuseTarget(''); }}>Cancel</button>
+        <button className="btn arrest" disabled={!chosen}
+          onClick={() => { act({ type: 'accuse', target: accuseTarget }); setAccuseTarget(''); setPicking(false); }}>
+          {chosen ? `Call the vote on ${chosen.name}` : 'Pick a suspect'}
+        </button>
+      </Dock>
+    );
+  }
+
+  return (
+    <Dock title="Information Phase" recap={recap}
+      sub={`Compare envelopes in chat. The round ends when everyone is done or the timer runs out.${officer && view.accusationUsed ? " This round's vote has been used." : ''}`}>
+      {canAccuse && <Card label="Call a vote" kind="arrest" title="Accuse an officer of being the Crooked Cop" onClick={() => setPicking(true)} />}
+      {done}
     </Dock>
   );
 }

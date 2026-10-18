@@ -638,3 +638,61 @@ input, select {
 
 .sound-toggle { margin-left: auto; }
 .leave.with-sound { margin-left: 0; }
+
+/* ---------- Accusation vote ---------- */
+.dock.deciding { border-color: var(--gold); background: #231d10; box-shadow: 0 0 0 2px #d4a24c55, 0 -10px 30px #0008; }
+.vote-suspect { display: inline-flex; animation: pawn-pop 0.4s cubic-bezier(0.2, 1.5, 0.4, 1) backwards; }
+.decision {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 150px; padding: 10px 14px; text-align: left;
+  font: inherit; color: var(--text); border-radius: 10px; cursor: pointer; border: 2px solid; transition: transform 0.12s, background 0.15s;
+}
+.decision strong { font-family: var(--display); font-weight: 400; font-size: 20px; }
+.decision small { font-size: 11px; color: var(--muted); }
+.decision.guilty { background: #3a1d1f; border-color: var(--red); }
+.decision.guilty strong { color: #ff9b9b; }
+.decision.innocent { background: #18263a; border-color: #4f7fc0; }
+.decision.innocent strong { color: #a9c8ff; }
+.decision:hover { transform: translateY(-2px); }
+.decision.guilty:hover { background: #4a2124; }
+.decision.innocent:hover { background: #1d3150; }
+.vote-tally { display: inline-flex; align-items: center; gap: 3px; margin-left: 4px; white-space: nowrap; }
+.vote-tally i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); border: 1px solid var(--slate); }
+.vote-tally i.yes { background: var(--red); border-color: var(--red); }
+.vote-tally i.no { background: #4f7fc0; border-color: #4f7fc0; }
+.vote-tally i:last-of-type { margin-right: 6px; }
+.suspects { display: flex; flex-wrap: wrap; gap: 6px; }
+.suspect { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; font: 600 13px var(--ui); color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; cursor: pointer; }
+.suspect em { font-size: 10px; color: #8fdca4; }
+.suspect.selected { border-color: var(--red); box-shadow: inset 0 0 0 1px var(--red); background: #3a1d1f; }
+
+/* ---------- Chat on the map ---------- */
+.bubble-body { animation: bubble-in 0.3s cubic-bezier(0.2, 1.4, 0.4, 1) backwards; }
+@keyframes bubble-in { from { opacity: 0; transform: translateY(10px) scale(0.85); } }
+.bubble rect, .bubble path { fill: #f2e8d5; stroke: #0b0d11; stroke-width: 2.5; }
+.bubble path { stroke: none; }
+.bubble text { font: 600 17px var(--ui); fill: #1a1d24; }
+.bubble.police rect, .bubble.police path { fill: #cfe0ff; }
+.bubble.heisters rect, .bubble.heisters path { fill: #ffd0d0; }
+.bubble.dm rect, .bubble.dm path { fill: #e6d6ff; }
+.chat-ticker { position: absolute; top: 8px; left: 8px; z-index: 4; display: flex; flex-direction: column; gap: 4px; max-width: min(360px, 60%); pointer-events: none; }
+.tick { font-size: 12px; padding: 5px 10px; border-radius: 10px; background: #0b0d11e6; border: 1px solid var(--line); color: var(--text); animation: item-in 0.25s ease-out backwards; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tick.police { border-color: #2c5a85; }
+.tick.heisters { border-color: #6b2a2a; }
+.tick.dm { border-color: #5b4a85; }
+.tick-chan { font: 700 9px var(--ui); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-right: 6px; }
+
+/* ---------- Chat grouping and log rounds ---------- */
+.msg.head { margin-top: 6px; }
+.msg-head { display: flex; align-items: center; gap: 6px; margin-bottom: 1px; }
+.msg-head time { font-size: 10px; color: var(--muted); }
+.msg .text { padding-left: 26px; }
+.msg.system .text { padding-left: 0; }
+.log li { display: flex; gap: 8px; align-items: baseline; }
+.log li.log-head { position: sticky; top: -1px; z-index: 1; display: block; font: 700 10px var(--ui); text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); background: var(--panel); padding: 8px 0 4px; border-bottom: 1px solid var(--line); }
+.log-glyph { flex: none; width: 16px; text-align: center; font-weight: 700; color: var(--muted); }
+.log-arrest .log-glyph { color: #ff9b9b; }
+.log-fail .log-glyph { color: #e7b46b; }
+.log-accuse .log-glyph { color: #f0c27a; }
+.log-expose .log-glyph { color: #7fdc98; }
+.log-announce .log-glyph, .log-win .log-glyph { color: var(--gold); }
+.log li strong { font-weight: 700; }
