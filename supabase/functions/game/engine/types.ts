@@ -49,6 +49,7 @@ export interface Player {
   envelopeGiven: boolean;
   autoPlaced?: boolean; // placed at random when setup timed out
   cleared?: boolean; // voted on and shown not to be the Crooked Cop
+  expressRound?: number; // round a Heister last took the Express
 }
 
 export interface Envelope {
@@ -153,6 +154,7 @@ export interface PublicPlayer {
   moved: boolean;
   acted: 'search' | 'arrest' | null;
   cleared: boolean;
+  expressCooldown: boolean; // Heister used Express last round (Heister team and facilitator only)
 }
 
 export interface View {

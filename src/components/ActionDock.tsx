@@ -84,11 +84,15 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
       </button>
     </>
   );
-  const moveCards = (step?: string, done?: boolean) => (
+  // A Heister's Express card recharges for a round after use.
+  const recharging = me.expressCooldown;
+  const moveCards = () => (
     <>
-      <Card step={step} label="Move 1–2" kind="move" selected={mode === 'move'} done={done} onClick={() => pick('move')} />
-      <Card step={step && !done ? 'or' : undefined} label="Express" icon="/assets/card-express.png" kind="express" selected={mode === 'express'} done={done}
-        title="Up to 4 stops along one line" onClick={() => pick('express')} />
+      <Card label="Move 1–2" kind="move" selected={mode === 'move'} onClick={() => pick('move')} />
+      <Card step={recharging ? 'Recharging' : undefined} label="Express" icon="/assets/card-express.png" kind="express"
+        selected={mode === 'express'} disabled={recharging}
+        title={recharging ? 'You used Express last round. It is ready again next round.' : 'Up to 4 stops along one line'}
+        onClick={() => pick('express')} />
     </>
   );
 

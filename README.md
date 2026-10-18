@@ -70,7 +70,8 @@ numbers can be changed in the lobby.
   **one** action: Move (1–2 stations), Express (up to 4 on one line), Search or Arrest, or passes. The team has
   3 arrests per round.
 - **Staying put**: moving is optional for everyone ("Stay put" / just end your turn).
-- **Express**: must stay on a single line and picks up an Artifact only at its final stop. A normal move picks
+- **Express**: must stay on a single line and picks up an Artifact only at its final stop. A Heister's Express card
+  then recharges for one round (they can't Express two rounds in a row); officers have no cooldown. A normal move picks
   up Artifacts at every station it passes.
 - **Search**: your station or one stop away (lobby setting), and the officer **goes to** the searched station. The envelope says whether a Heister is there right
   now, whether one passed through in the last 2 rounds, and any Artifact found or taken there, plus a random

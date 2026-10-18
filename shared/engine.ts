@@ -177,7 +177,7 @@ function startGame(g: GameState, t: number) {
     if (p.wantsSpectate) p.role = 'spectator';
     Object.assign(p, {
       status: 'active', station: null, carried: 0, done: false, moved: false, acted: null,
-      envelopeGiven: false, skipPoliceRound: undefined, noArrestRound: undefined, cleared: false,
+      envelopeGiven: false, skipPoliceRound: undefined, noArrestRound: undefined, cleared: false, expressRound: undefined,
     });
   }
   const candidates = STATIONS.filter((s) => !s.exit).map((s) => s.id);
@@ -467,7 +467,10 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
       if (g.phase === 'heister') {
         if (me.role !== 'heister') fail('It is the Heister Phase.');
         if (me.done) fail('You already moved this round.');
+        // A Heister's Express needs a round to recharge.
+        if (action.express && me.expressRound === g.round - 1) fail('Your Express card is recharging. You can use it again next round.');
         validatePath(me.station!, action.path, action.express);
+        if (action.express) me.expressRound = g.round;
         const stops = action.express ? [action.path[action.path.length - 1]] : action.path;
         for (const st of stops) {
           g.visits.push({ heister: me.id, station: st, round: g.round });
@@ -710,6 +713,7 @@ export function viewFor(g: GameState, viewerId: string, t: number): View {
       moved: p.moved,
       acted: p.acted,
       cleared: !!p.cleared,
+      expressCooldown: p.role === 'heister' && (godView || heisterTeam) && p.expressRound === g.round - 1,
     };
   });
 

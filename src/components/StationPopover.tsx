@@ -38,7 +38,7 @@ function choices(view: View, id: string): Choice[] {
     && ((view.phase === 'heister' && view.myRole === 'heister') || (view.phase === 'police' && officer && myTurn && !me.moved && !me.acted));
   if (canMove) {
     const walk = pathTo(view, 'move', id);
-    const express = walk ? null : pathTo(view, 'express', id);
+    const express = walk || me.expressCooldown ? null : pathTo(view, 'express', id);
     const route = walk ?? express;
     if (route) {
       const via = route.slice(0, -1).map(stationLabel);

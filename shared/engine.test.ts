@@ -306,3 +306,21 @@ describe('one action per officer', () => {
     expect(() => act(g, first, { type: 'search', station: ADJ[from][0].to })).toThrow(/turn is over/);
   });
 });
+
+describe('heister express', () => {
+  it('needs a round to recharge after use', () => {
+    let g = setup(4);
+    const [h] = byRole(g, 'heister');
+    g = placeAll(g, { [h.id]: 'lawton' });
+    g = act(g, h.id, { type: 'move', path: ['taytay', 'east_road'], express: true });
+    let t = T0;
+    while (g.phase !== 'heister' || g.round !== 2) g = act(g, h.id, { type: 'tick' }, (t += 61_000));
+    expect(viewFor(g, h.id, t).players.find((p) => p.id === h.id)!.expressCooldown).toBe(true);
+    const cop = g.players.find((p) => p.role === 'police')!;
+    expect(viewFor(g, cop.id, t).players.find((p) => p.id === h.id)!.expressCooldown).toBe(false);
+    expect(() => act(g, h.id, { type: 'move', path: ['bgc'], express: true }, t)).toThrow(/recharging/);
+    g = act(g, h.id, { type: 'move', path: ['bgc'], express: false }, t);
+    while (g.phase !== 'heister' || g.round !== 3) g = act(g, h.id, { type: 'tick' }, (t += 61_000));
+    expect(() => act(g, h.id, { type: 'move', path: ['east_road'], express: true }, t)).not.toThrow();
+  });
+});
