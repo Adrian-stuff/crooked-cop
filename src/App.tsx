@@ -6,14 +6,24 @@ import { hasTableGame } from './net/useTableGame';
 import { GameScreen } from './screens/GameScreen';
 import { Home } from './screens/Home';
 import { Lobby } from './screens/Lobby';
+import { CopsScreen } from './screens/CopsScreen';
+import { DisplayScreen } from './screens/DisplayScreen';
 import { TableApp } from './screens/TableScreen';
 
 const useBackend = USE_SUPABASE ? useSupabaseGame : useGame;
 
-// Facilitator mode runs entirely on this device, so it never opens a connection.
+// A link like ?display=CODE or ?cops=CODE opens a device that follows a facilitator-mode game.
+const params = new URLSearchParams(location.search);
+const deviceCode = (key: string) => params.get(key)?.toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
+
+// Facilitator mode runs on this device; it only goes online if the facilitator connects other devices.
 export default function App() {
   const [table, setTable] = useState(hasTableGame);
   const exitTable = useCallback(() => setTable(false), []);
+  const display = deviceCode('display');
+  const cops = deviceCode('cops');
+  if (display) return <DisplayScreen code={display} />;
+  if (cops) return <CopsScreen code={cops} />;
   return table ? <TableApp onExit={exitTable} /> : <OnlineApp onTable={() => setTable(true)} />;
 }
 

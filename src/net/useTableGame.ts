@@ -1,10 +1,11 @@
 // Facilitator-only mode for a game played on the physical board. The rules engine runs here in
 // the browser, the facilitator records every player's move on this one device, and the game is
 // saved locally so a reload doesn't lose it. Nothing goes to a server.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GameError, addPlayer, applyAction, createGame, kickPlayer, tick, viewFor } from '../../shared/engine';
 import { EXIT_STATION, stationLabel } from '../../shared/map';
 import type { Action, GameState, Role, Settings, View } from '../../shared/types';
+import { newLinkCode } from './tableLink';
 
 export const FACILITATOR = 'facilitator';
 const SAVE_KEY = 'crooked-cop-table';
@@ -23,6 +24,7 @@ interface TableSave {
   dealRandom: boolean; // deal roles at random, or match the physical role cards
   roles: Record<string, DealtRole>;
   history: Snapshot[];
+  link?: string | null; // room code other devices join with
 }
 
 function load(): TableSave | null {
@@ -89,6 +91,11 @@ export function useTableGame() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => store(save), [save]);
+
+  const latest = useRef(save);
+  useEffect(() => {
+    latest.current = save;
+  }, [save]);
 
   // Runs the phase timer: once it expires the engine moves the game on, exactly as online.
   useEffect(() => {
@@ -199,6 +206,27 @@ export function useTableGame() {
       g.log.push({ id: g.nextId++, round: g.round, kind: 'info', text: `Note: ${text.trim()}` });
       return { ...s, state: g };
     }),
+
+    // An action sent from the cops device. Only the officer whose turn it is may act, and only
+    // with their turn's actions. Returns the rules error, or null once it's recorded.
+    tryAs: (as: string, action: Action): string | null => {
+      const s = latest.current;
+      if (!s) return 'No game is running.';
+      if (s.state.phase !== 'police' || s.state.policeTurn !== as) return "It isn't this officer's turn any more.";
+      if (!['move', 'search', 'arrest', 'ultimate', 'endTurn'].includes(action.type)) return 'The facilitator records that.';
+      try {
+        applyAction(s.state, as, action, Date.now()); // check it first, so the error goes back to the device
+      } catch (e) {
+        if (e instanceof GameError) return e.message;
+        throw e;
+      }
+      actAs(as, action);
+      return null;
+    },
+
+    // ---------- Devices ----------
+    startLink: () => change((s) => ({ ...s, link: s.link ?? newLinkCode() }), false),
+    stopLink: () => change((s) => ({ ...s, link: null }), false),
 
     // ---------- Timer ----------
     pause: () => setSave((s) => (s && s.paused === null && s.state.deadline !== null

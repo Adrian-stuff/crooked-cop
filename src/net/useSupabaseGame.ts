@@ -2,20 +2,11 @@
 // Requests go over HTTP; each player's private view and chat arrive on a
 // Realtime broadcast topic named after their secret token.
 
-import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Action, ChatMessage, View } from '../../shared/types';
 import type { ConnState, Game } from './useGame';
-import { SUPABASE_KEY, SUPABASE_URL } from './config';
-
-// Created on first use so the local-server build never needs Supabase settings.
-let client: SupabaseClient | null = null;
-function sb(): SupabaseClient {
-  client ??= createClient(SUPABASE_URL, SUPABASE_KEY, {
-    auth: { persistSession: false },
-  });
-  return client;
-}
+import { sb } from './supabase';
 
 const SESSION_KEY = 'crooked-cop-session';
 interface Session {

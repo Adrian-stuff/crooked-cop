@@ -5,7 +5,8 @@ import type { Settings, View } from '../../shared/types';
 import { TokenIcon } from '../components/Token';
 import { SPECTATOR_IDENTITY, seatIdentities, tokenText } from '../game/identity';
 import { checkCards, type DealtRole, type TableGame } from '../net/useTableGame';
-import { TableTopBar } from './TableScreen';
+import type { FacilitatorLink } from '../net/tableLink';
+import { DevicesPanel, TableTopBar } from './TableScreen';
 
 const ROLE_OPTIONS: { value: DealtRole; label: string }[] = [
   { value: 'police', label: 'Officer' },
@@ -13,7 +14,7 @@ const ROLE_OPTIONS: { value: DealtRole; label: string }[] = [
   { value: 'traitor', label: 'Crooked Cop' },
 ];
 
-export function TableLobby({ table, view }: { table: TableGame; view: View }) {
+export function TableLobby({ table, view, link }: { table: TableGame; view: View; link: FacilitatorLink }) {
   const [name, setName] = useState('');
   const save = table.save!;
   const seated = view.players.filter((p) => !p.wantsSpectate);
@@ -117,6 +118,8 @@ export function TableLobby({ table, view }: { table: TableGame; view: View }) {
           </label>
           <p className="hint">Timers run on this device. You can pause or add time whenever the table needs it.</p>
         </section>
+
+        <DevicesPanel table={table} link={link} />
       </main>
     </div>
   );

@@ -1,6 +1,6 @@
 /* ---------- Facilitator mode (physical board) ---------- */
 .table-top-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
-.table-lobby { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+.table-lobby { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); }
 .table-title { font-family: var(--display); font-weight: 400; font-size: 26px; color: var(--cream); margin: 0 0 4px; }
 .table-add { margin-bottom: 8px; }
 .table-add input { flex: 1; }
@@ -62,3 +62,73 @@
 }
 
 .home-table { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+.home-device { width: 100%; margin-top: 10px; text-align: center; }
+.home-device summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.home-device .code-input { width: 100%; margin: 6px 0 8px; }
+.home-device .join-row .btn { flex: 1; justify-content: center; }
+
+/* ---------- Linked devices ---------- */
+.devices-head { display: flex; align-items: center; justify-content: space-between; }
+.devices-head h3 { margin: 0; }
+.devices-code { font-family: var(--display); font-size: 34px; letter-spacing: 0.18em; color: var(--gold); margin: 2px 0 10px; }
+.devices-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.devices-list li { display: flex; align-items: center; gap: 10px; }
+.device-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.device-info small { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.device-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--slate); }
+.device-dot.on { background: #4fc06c; box-shadow: 0 0 0 3px #4fc06c33; }
+.device-banner { background: #33280f; color: #ffd87a; border: 1px solid #5a4613; text-align: center; padding: 6px 10px; font-size: 13px; border-radius: 8px; }
+.device-wait { display: grid; place-content: center; gap: 8px; text-align: center; }
+
+/* Table display: built to be read from across the room. */
+.display-screen { min-height: 100%; display: flex; flex-direction: column; gap: 12px; padding: 16px; background: var(--bg); }
+.display-screen.phase-bg-heister { background: radial-gradient(ellipse at 50% 0%, #b33a3a33, transparent 55%), var(--bg); }
+.display-screen.phase-bg-police { background: radial-gradient(ellipse at 50% 0%, #1f3a5f66, transparent 55%), var(--bg); }
+.display-screen.phase-bg-info { background: radial-gradient(ellipse at 50% 0%, #3f7d4f33, transparent 55%), var(--bg); }
+.display-head { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.display-phase { display: flex; flex-direction: column; flex: 1 1 320px; min-width: 0; }
+.display-phase strong { font-family: var(--display); font-weight: 400; font-size: clamp(32px, 4.5vw, 64px); line-height: 1; color: var(--cream); }
+.display-now { font-size: clamp(15px, 1.6vw, 22px); color: var(--gold); margin-top: 6px; }
+.display-clock { font-family: var(--display); font-size: clamp(64px, 9vw, 140px); line-height: 1; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; align-items: center; }
+.display-clock small { font: 600 14px var(--ui); letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); }
+.display-clock.urgent { color: #ff6b6b; animation: pulse 1s infinite; }
+.display-clock.paused { color: var(--muted); }
+.display-facts { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.display-facts .chip { font-size: 15px; padding: 6px 12px; }
+.display-main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 380px); gap: 14px; align-items: start; }
+.display-board { background: var(--board); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.display-side { display: flex; flex-direction: column; gap: 14px; }
+.display-side .log ul { max-height: 46vh; }
+.display-recap { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.display-verdict h2 { font-family: var(--display); font-weight: 400; font-size: 36px; margin: 0; }
+.display-verdict.heisters { border-color: var(--red); }
+.display-verdict.police { border-color: #4f7fc0; }
+
+/* Cops device: one tablet passed around the Police team. */
+.cops-screen { min-height: 100%; }
+.cops-screen > .device-banner { margin: 10px 16px 0; }
+.cops-card {
+  width: min(560px, calc(100% - 32px)); margin: 32px auto; display: flex; flex-direction: column; align-items: center; gap: 12px;
+  text-align: center; padding: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.cops-card h1 { font-family: var(--display); font-weight: 400; font-size: 38px; margin: 0; color: var(--cream); }
+.cops-card.compact { margin: 0; width: auto; align-items: stretch; text-align: left; }
+.cops-card.compact h1 { font-size: 28px; }
+.cops-card .suspects { justify-content: center; }
+.cops-row { display: flex; gap: 8px; }
+.cops-clock { font-family: var(--display); font-size: 40px; font-variant-numeric: tabular-nums; }
+.pt-round .cops-clock { font-size: inherit; margin-left: 6px; color: var(--text); }
+.cops-clock.urgent { color: #ff6b6b; }
+.cops-clock.paused { color: var(--muted); }
+.cops-recap { justify-content: center; }
+.cops-turn { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.cops-busy { opacity: 0.55; pointer-events: none; }
+.cops-reveal { padding: 16px; display: grid; grid-template-columns: minmax(300px, 420px) minmax(0, 1fr); gap: 14px; align-items: start; }
+.cops-reveal-board { background: var(--board); overflow: hidden; }
+.cops-empty { padding: 14px; }
+.cops-empty p { margin: 0 0 6px; }
+
+@media (max-width: 900px) {
+  .display-main, .cops-reveal { grid-template-columns: 1fr; }
+  .display-facts { align-items: flex-start; }
+}

@@ -11,6 +11,7 @@ import { StatusStrip } from '../components/StatusStrip';
 import { TokenIcon } from '../components/Token';
 import { SPECTATOR_IDENTITY, seatIdentities, tokenText, type Identity } from '../game/identity';
 import { actsThisPhase, marksFor, type Mode } from '../game/selection';
+import { deviceUrl, useFacilitatorLink, type DeviceKind, type FacilitatorLink } from '../net/tableLink';
 import { downloadRecord, useTableGame, type TableGame } from '../net/useTableGame';
 import { TableLobby } from './TableLobby';
 import '../table.css';
@@ -27,6 +28,7 @@ const clock = (ms: number) => {
 
 export function TableApp({ onExit }: { onExit: () => void }) {
   const table = useTableGame();
+  const link = useFacilitatorLink(table);
   const { error, clearError } = table;
 
   useEffect(() => {
@@ -42,7 +44,9 @@ export function TableApp({ onExit }: { onExit: () => void }) {
   if (!table.view) return null;
   return (
     <>
-      {table.view.phase === 'lobby' ? <TableLobby table={table} view={table.view} /> : <TableScreen table={table} view={table.view} />}
+      {table.view.phase === 'lobby'
+        ? <TableLobby table={table} view={table.view} link={link} />
+        : <TableScreen table={table} view={table.view} link={link} />}
       {error && <div className="toast" role="alert" onClick={clearError}>{error}</div>}
     </>
   );
@@ -217,6 +221,54 @@ function InfoRecorder({ table, view, ids }: { table: TableGame; view: View; ids:
   );
 }
 
+const DEVICE_COPY: Record<DeviceKind, { title: string; body: string }> = {
+  display: { title: 'Table display', body: 'A TV or laptop everyone can see: timer, board, announcements and results. Nothing secret.' },
+  cops: { title: 'Cops device', body: 'A tablet the officers pass around. Each officer picks their action on it and reads their envelope in private.' },
+};
+
+// Lets a table display and a shared cops device follow this game. This device stays in charge.
+export function DevicesPanel({ table, link }: { table: TableGame; link: FacilitatorLink }) {
+  const [copied, setCopied] = useState<DeviceKind | null>(null);
+  if (!link.code) {
+    return (
+      <section className="panel devices">
+        <h3>Other devices</h3>
+        <p className="muted small">Add a table display everyone can see, and a cops device the officers pass around to pick actions and read envelopes. Needs an internet connection.</p>
+        <button className="btn" onClick={table.startLink}>Connect devices</button>
+      </section>
+    );
+  }
+  const copy = (kind: DeviceKind) => {
+    navigator.clipboard?.writeText(deviceUrl(kind, link.code!)).then(() => {
+      setCopied(kind);
+      setTimeout(() => setCopied(null), 1500);
+    }).catch(() => {});
+  };
+  return (
+    <section className="panel devices">
+      <div className="devices-head">
+        <h3>Other devices</h3>
+        <span className={`chip ${link.online ? '' : 'warn'}`}>{link.online ? 'Live' : 'Connecting…'}</span>
+      </div>
+      <p className="muted small">On each device, open the game and choose <strong>Join a table device</strong> with code</p>
+      <div className="devices-code">{link.code}</div>
+      <ul className="devices-list">
+        {(['display', 'cops'] as const).map((kind) => (
+          <li key={kind}>
+            <span className={`device-dot ${link.devices[kind] ? 'on' : ''}`} aria-hidden="true" />
+            <span className="device-info">
+              <strong>{DEVICE_COPY[kind].title}</strong>
+              <small>{link.devices[kind] ? `${link.devices[kind]} connected` : 'Not connected'} · {DEVICE_COPY[kind].body}</small>
+            </span>
+            <button className="btn ghost small" onClick={() => copy(kind)}>{copied === kind ? 'Copied' : 'Copy link'}</button>
+          </li>
+        ))}
+      </ul>
+      <button className="btn ghost small" onClick={() => confirm('Disconnect the other devices?') && table.stopLink()}>Stop sharing</button>
+    </section>
+  );
+}
+
 function Notes({ table }: { table: TableGame }) {
   const [text, setText] = useState('');
   return (
@@ -230,7 +282,7 @@ function Notes({ table }: { table: TableGame }) {
   );
 }
 
-export function TableScreen({ table, view }: { table: TableGame; view: View }) {
+export function TableScreen({ table, view, link }: { table: TableGame; view: View; link: FacilitatorLink }) {
   const ids = useMemo(() => seatIdentities(view.players), [view.players]);
   const waiting = view.players.filter((p) => actsThisPhase(view.phase, p) && !p.done);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -267,7 +319,8 @@ export function TableScreen({ table, view }: { table: TableGame; view: View }) {
   }, [editArtifacts, mode, actorView, path, view.exits]);
 
   const shownEnv = view.envelopes.find((e) => e.id === (hoverEnv ?? pinnedEnv));
-  const swept = shownEnv?.search?.area ?? view.envelopes.filter((e) => e.kind === 'search' && e.round === view.round).at(-1)?.search?.area;
+  const areaOf = (e?: (typeof view.envelopes)[number]) => e?.search?.area ?? e?.scan?.stations;
+  const swept = areaOf(shownEnv) ?? areaOf(view.envelopes.filter((e) => (e.kind === 'search' || e.kind === 'ultimate') && e.round === view.round).at(-1));
   const highlightEnv = (id: string | null, pin?: boolean) => {
     if (pin) setPinnedEnv((p) => (p === id ? null : id));
     else setHoverEnv(id);
@@ -351,6 +404,7 @@ export function TableScreen({ table, view }: { table: TableGame; view: View }) {
         </div>
         <aside className="side-col">
           <Envelopes view={view} ids={ids} highlight={hoverEnv ?? pinnedEnv} onHighlight={highlightEnv} />
+          <DevicesPanel table={table} link={link} />
           <Notes table={table} />
           {view.phase === 'ended' && (
             <section className="panel">

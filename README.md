@@ -127,6 +127,23 @@ is saved in the browser so a reload carries on where it left off.
 The code is `src/net/useTableGame.ts` (local game and save), `src/screens/TableLobby.tsx` and
 `src/screens/TableScreen.tsx`.
 
+### Extra devices
+
+From **Other devices → Connect devices** the facilitator gets a 6-letter code. On another device choose **Join a
+table device** on the home screen (or open `?display=CODE` / `?cops=CODE`):
+
+- **Table display**: a TV or laptop everyone can see. Big timer, phase and whose turn it is, the board as the public
+  sees it, the round recap, players, the dispatch log, vote results and the final verdict. Nothing secret.
+- **Cops device**: one tablet the officers pass around. When an officer is up it says whose turn it is; they tap
+  "I'm …", pick their action on the board, then see their envelope in private and hide it before passing it on.
+  Every officer sees that envelope screen, even when it's empty, so the Crooked Cop's tip-off doesn't give them away.
+  Anyone can re-read their own envelopes between turns.
+
+The facilitator's device stays the only copy of the game and keeps working if the others drop out; it can still
+record any officer's turn itself. Linking uses a Realtime broadcast topic named after the code (`src/net/tableLink.ts`),
+so it needs internet but no server changes. The code is the only protection, so anyone who has it could read the
+envelopes in their browser's developer tools.
+
 ## Online play (Supabase)
 
 The online backend runs on the Supabase project **crooked-cop** (`hxoubdwmvrecptxzrzzp`). It is already deployed.

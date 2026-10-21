@@ -7,6 +7,8 @@ export function Home({ game, onTable }: { game: Game; onTable: () => void }) {
     try { return localStorage.getItem('crooked-cop-name') ?? ''; } catch { return ''; }
   });
   const [code, setCode] = useState(initialCode);
+  const [device, setDevice] = useState('');
+  const openDevice = (kind: 'display' | 'cops') => { location.search = `?${kind}=${device.trim().toUpperCase()}`; };
   const remember = () => { try { localStorage.setItem('crooked-cop-name', name.trim()); } catch { /* ignore */ } };
 
   return (
@@ -42,6 +44,16 @@ export function Home({ game, onTable }: { game: Game; onTable: () => void }) {
           <span className="muted small">Playing on the physical board?</span>
           <button className="btn ghost" onClick={onTable}>Facilitator mode</button>
           <span className="muted small">One device records the timer, log, clues and Artifacts. Works offline.</span>
+          <details className="home-device">
+            <summary>Join a table device</summary>
+            <p className="muted small">Type the code from the facilitator's screen.</p>
+            <input value={device} onChange={(e) => setDevice(e.target.value.toUpperCase())} maxLength={6} placeholder="CODE"
+              aria-label="Device code" className="code-input" />
+            <div className="join-row">
+              <button className="btn" disabled={device.trim().length !== 6} onClick={() => openDevice('display')}>Table display</button>
+              <button className="btn" disabled={device.trim().length !== 6} onClick={() => openDevice('cops')}>Cops device</button>
+            </div>
+          </details>
         </div>
       </div>
       <footer className="credits">
