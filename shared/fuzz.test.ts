@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addPlayer, applyAction, createGame, GameError, viewFor } from './engine';
-import { ADJ, STATIONS, neighbours } from './map';
+import { ADJ, STATIONS, linesAt, neighbours } from './map';
 import type { Action, GameState } from './types';
 
 function rng(seed: number) {
@@ -24,6 +24,7 @@ function randomAction(g: GameState, id: string, r: () => number): Action {
     { type: 'move', path: step(), express: r() < 0.2 },
     { type: 'search', station: any([here, ...neighbours(here)]) },
     { type: 'arrest', station: any([here, ...ADJ[here].map((n) => n.to)]) },
+    { type: 'ultimate', line: any(linesAt(here)) },
     { type: 'endTurn' },
     { type: 'ready' },
     { type: 'accuse', target: any(g.players).id },

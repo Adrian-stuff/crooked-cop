@@ -3,7 +3,8 @@
 // It runs the same in the Node dev server and in a Supabase edge function.
 
 import {
-  ADJ, EXIT_STATION, EXPRESS_STOPS, STATIONS, distance, exitsFor, expressStep, isAdjacent, lineName, linesAt, searchArea, stationLabel,
+  ADJ, EXIT_STATION, EXPRESS_STOPS, STATIONS, distance, exitsFor, expressStep, isAdjacent, lineName, lineStations, linesAt, searchArea,
+  stationLabel,
 } from './map.ts';
 import {
   DEFAULT_SETTINGS, type Action, type Envelope, type GameState, type LogEntry, type Player, type SearchResult,
@@ -18,6 +19,9 @@ const fail = (msg: string): never => {
 
 // A Heister escapes once they carry half of all the Artifacts (rounded up).
 export const escapeTarget = (s: Settings) => Math.ceil(s.artifactCount / 2);
+
+// Officers can play their Police Ultimate once the Heisters have taken this many Artifacts.
+export const ULTIMATE_UNLOCK = 3;
 
 // An officer who is AFK or offline gets this long for their Police turn, so they don't hold up the table.
 export const AFK_TURN_SECONDS = 15;
@@ -59,7 +63,7 @@ export function createGame(code: string, hostId: string, hostName: string, seed:
     players: [blankPlayer(hostId, hostName, true)], artifacts: {}, announcedTaken: 0, visits: [],
     pickups: [], arrestsThisRound: 0, exits: [EXIT_STATION], exitStreak: {}, exitMustClear: [], accusation: null,
     accusationUsed: false, envelopes: [], log: [], winner: null, endReason: null, trails: {}, nextId: 1,
-    policeTurn: null, reveal: null, tipoff: null, roundActions: [], takenThisRound: 0,
+    policeTurn: null, reveal: null, tipoff: null, roundActions: [], takenThisRound: 0, ultimateUnlocked: false,
   };
 }
 
@@ -132,7 +136,7 @@ function markAfk(g: GameState, p: Player) {
   log(g, 'info', `${p.name} is AFK (ran out of time).`);
 }
 
-function envelope(g: GameState, to: string, kind: Envelope['kind'], title: string, lines: string[], extra: Pick<Envelope, 'search' | 'tip'> = {}) {
+function envelope(g: GameState, to: string, kind: Envelope['kind'], title: string, lines: string[], extra: Pick<Envelope, 'search' | 'tip' | 'scan'> = {}) {
   g.envelopes.push({ id: `e${g.nextId++}`, to, round: g.round, kind, title, lines: lines.map(tidy), ...extra });
 }
 
@@ -187,6 +191,7 @@ function startGame(g: GameState, t: number) {
     Object.assign(p, {
       status: 'active', station: null, carried: 0, done: false, moved: false, acted: null,
       envelopeGiven: false, skipPoliceRound: undefined, noArrestRound: undefined, cleared: false, expressRound: undefined, afk: false,
+      ultimateUsed: false,
     });
   }
   g.exits = exitsFor(seats.length);
@@ -197,6 +202,7 @@ function startGame(g: GameState, t: number) {
     round: 0, visits: [], pickups: [], arrestsThisRound: 0, exitStreak: {}, exitMustClear: [],
     accusation: null, accusationUsed: false, envelopes: [], log: [], winner: null, endReason: null,
     trails: {}, announcedTaken: 0, policeTurn: null, reveal: null, tipoff: null, roundActions: [], takenThisRound: 0,
+    ultimateUnlocked: false,
   });
   g.phase = 'setup';
   g.deadline = t + g.settings.setupSeconds * 1000;
@@ -264,6 +270,11 @@ function endHeisterPhase(g: GameState, t: number) {
   g.takenThisRound = Math.max(0, taken - g.announcedTaken);
   g.announcedTaken = taken;
   log(g, 'announce', `${plural(taken, 'Artifact')} of ${g.settings.artifactCount} ${taken === 1 ? 'has' : 'have'} been taken.`);
+  // Once unlocked the Ultimate stays available, even if an arrest later drops Artifacts back on the map.
+  if (!g.ultimateUnlocked && taken >= ULTIMATE_UNLOCK) {
+    g.ultimateUnlocked = true;
+    log(g, 'announce', 'Police Ultimate unlocked: each officer may scan one line for Heisters, once per game.');
+  }
   g.phase = 'police';
   g.policeTurn = null;
   g.arrestsThisRound = 0;
@@ -276,7 +287,7 @@ function endHeisterPhase(g: GameState, t: number) {
     if (isPolice(p) && p.status === 'active' && skipping) log(g, 'info', `${p.name} sits out this Police Phase (wrong arrest).`);
   }
   for (const ex of g.exitMustClear) log(g, 'info', `Exit rule: ${stationLabel(ex)} must be empty of officers at the end of this round.`);
-  log(g, 'info', 'Police Phase: officers take turns, one action each: Move, Express, Search or Arrest.');
+  log(g, 'info', `Police Phase: officers take turns, one action each: Move, Express, Search${g.ultimateUnlocked ? ', Arrest or Ultimate' : ' or Arrest'}.`);
   maybeEndPolicePhase(g, t);
 }
 
@@ -443,6 +454,7 @@ function upgrade(g: GameState): GameState {
   if (g.policeTurn === undefined) g.policeTurn = null;
   g.roundActions ??= [];
   g.takenThisRound ??= 0;
+  g.ultimateUnlocked ??= g.announcedTaken >= ULTIMATE_UNLOCK;
   if (g.phase === 'police' && !g.policeTurn) g.policeTurn = activePolice(g).find((p) => !p.done)?.id ?? null;
   return g;
 }
@@ -601,6 +613,29 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
         me.skipPoliceRound = g.round + 1;
         log(g, 'fail', `${me.name}'s arrest at ${stationLabel(target)} failed. The station was empty. ${me.name} skips next Police Phase.`);
       }
+      finishPoliceTurn(g, me);
+      maybeEndPolicePhase(g, t);
+      break;
+    }
+
+    case 'ultimate': {
+      if (g.phase !== 'police' || !isPolice(me)) fail('Only officers can play the Ultimate during the Police Phase.');
+      if (me.status !== 'active' || me.done) fail('Your turn is over.');
+      if (g.policeTurn !== me.id) fail('Wait for your turn.');
+      if (me.acted || me.moved) fail('You already used your action this round.');
+      if (!g.ultimateUnlocked) fail(`The Ultimate unlocks once the Heisters have taken ${ULTIMATE_UNLOCK} Artifacts.`);
+      if (me.ultimateUsed) fail('You already played your Ultimate this game.');
+      if (!linesAt(me.station!).includes(action.line)) fail('Pick a line that runs through your station.');
+      me.ultimateUsed = true;
+      me.acted = 'ultimate';
+      const stations = lineStations(action.line);
+      const found = activeHeisters(g).some((h) => stations.includes(h.station!));
+      const line = lineName(action.line);
+      envelope(g, me.id, 'ultimate', `Ultimate: ${line} line`,
+        [found ? `At least one Heister is on the ${line} line right now.` : `No Heister is on the ${line} line right now.`],
+        { scan: { line: action.line, from: me.station!, stations, found } });
+      g.roundActions.push({ by: me.id, kind: 'ultimate', station: me.station!, line: action.line });
+      log(g, 'info', `${me.name} played the Police Ultimate on the ${line} line.`);
       finishPoliceTurn(g, me);
       maybeEndPolicePhase(g, t);
       break;
@@ -778,6 +813,7 @@ export function viewFor(state: GameState, viewerId: string, t: number): View {
       acted: p.acted,
       cleared: !!p.cleared,
       afk: !!p.afk,
+      ultimateUsed: !!p.ultimateUsed,
       expressCooldown: p.role === 'heister' && (godView || heisterTeam) && p.expressRound === g.round - 1,
     };
   });
@@ -807,5 +843,6 @@ export function viewFor(state: GameState, viewerId: string, t: number): View {
     tipoff: myRole === 'traitor' ? g.tipoff ?? null : null,
     roundActions: g.roundActions,
     takenThisRound: g.takenThisRound,
+    ultimateUnlocked: g.ultimateUnlocked,
   };
 }

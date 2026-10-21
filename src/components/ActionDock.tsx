@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from 'react';
-import { escapeTarget } from '../../shared/engine';
-import { EXPRESS_STOPS, stationLabel } from '../../shared/map';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { ULTIMATE_UNLOCK, escapeTarget } from '../../shared/engine';
+import { EXPRESS_STOPS, LINES, lineName, linesAt, lineStations, stationLabel } from '../../shared/map';
 import type { Action, PublicPlayer, View } from '../../shared/types';
 import { SPECTATOR_IDENTITY, seatIdentities, tokenText } from '../game/identity';
 import type { Mode } from '../game/selection';
@@ -67,15 +67,16 @@ function Dock({ title, sub, children, tone = '', hint, recap }: DockProps) {
 }
 
 // What the officers did this round, shown while everyone compares notes.
-function RoundRecap({ view }: { view: View }) {
+export function RoundRecap({ view }: { view: View }) {
   const name = (id: string) => (id === view.me ? 'You' : view.players.find((p) => p.id === id)?.name ?? 'Someone');
   const items = view.roundActions.map((a, i) => {
     const who = name(a.by);
     const at = stationLabel(a.station);
     const text = a.kind === 'search' ? `${who} searched ${at}`
+      : a.kind === 'ultimate' ? `${who} scanned the ${lineName(a.line ?? '')} line`
       : a.kind === 'arrest' ? (a.ok ? `${who} caught a Heister at ${at}` : `${who}'s arrest at ${at} failed`)
         : a.kind === 'move' ? `${who} moved to ${at}` : `${who} passed`;
-    const tone = a.kind === 'arrest' ? (a.ok ? 'clear' : 'danger') : a.kind === 'search' ? 'search' : '';
+    const tone = a.kind === 'arrest' ? (a.ok ? 'clear' : 'danger') : a.kind === 'search' ? 'search' : a.kind === 'ultimate' ? 'ultimate' : '';
     return <span key={i} className={`recap-item ${tone}`}>{text}</span>;
   });
   return (
@@ -91,6 +92,8 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
   const me = view.players.find((p) => p.id === view.me);
   const [accuseTarget, setAccuseTarget] = useState('');
   const [picking, setPicking] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  useEffect(() => setScanning(false), [view.phase, view.round]);
   if (!me) return null;
   const officer = isOfficer(view.myRole);
   const active = me.status === 'active';
@@ -200,17 +203,46 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
       return <Dock title="Police Phase" sub={<>Officers go one at a time. {up ? <><strong>{up.name}</strong> is taking their turn.</> : ''} You're up soon.</>} />;
     }
     const noArrest = me.cannotArrest || view.arrestsLeft <= 0;
+    // The Police Ultimate: scan one line through your station for Heisters, once per game.
+    if (scanning && view.ultimateUnlocked && !me.ultimateUsed) {
+      const lines = linesAt(me.station!);
+      return (
+        <Dock tone="deciding" title="Police Ultimate"
+          sub={lines.length > 1
+            ? `${stationLabel(me.station!)} is an interchange. Pick which line to scan for Heisters. This uses your action and your one Ultimate.`
+            : 'Scan your whole line for Heisters. This uses your action and your one Ultimate.'}>
+          {lines.map((l) => {
+            const line = LINES.find((x) => x.id === l)!;
+            return (
+              <button key={l} className="decision ultimate" style={{ '--line-color': line.color } as CSSProperties}
+                onClick={() => { setScanning(false); act({ type: 'ultimate', line: l }); }}>
+                <strong><i className="line-swatch" />{line.name} line</strong>
+                <small>{lineStations(l).length} stations</small>
+              </button>
+            );
+          })}
+          <button className="btn ghost" onClick={() => setScanning(false)}>Cancel</button>
+        </Dock>
+      );
+    }
+    const ultimateStep = me.ultimateUsed ? 'Used'
+      : view.ultimateUnlocked ? 'Once per game' : `${Math.min(view.announcedTaken, ULTIMATE_UNLOCK)}/${ULTIMATE_UNLOCK} taken`;
+    const ultimateTitle = me.ultimateUsed ? 'You already played your Ultimate this game.'
+      : view.ultimateUnlocked ? 'Check whether any Heister is on a line through your station'
+        : `Unlocks once the Heisters have taken ${ULTIMATE_UNLOCK} Artifacts`;
     const warn = view.exitMustClear.length ? `Exit rule: no officer may end this round on ${view.exitMustClear.map(stationLabel).join(' or ')}`
       : me.cannotArrest ? 'You were wrongly accused: no arrests for you this round' : null;
     return (
       <Dock title="Your turn, Officer" hint={hint ?? warn ?? 'Click any station for options'}
-        sub="Pick one action: Move, Express, Search (you go there) or Arrest.">
+        sub={`Pick one action: Move, Express, Search (you go there)${view.ultimateUnlocked && !me.ultimateUsed ? ', Arrest or Ultimate' : ' or Arrest'}.`}>
         {routing ? route : (
           <>
             {moveCards()}
             <Card label="Search" kind="search" selected={mode === 'search'} title="Go to a nearby station and search it" onClick={() => pick('search')} />
             <Card step={`${view.arrestsLeft} left`} label="Arrest" icon="/assets/card-arrest.png" kind="arrest" selected={mode === 'arrest'}
               disabled={noArrest} onClick={() => pick('arrest')} />
+            <Card step={ultimateStep} label="Ultimate" kind="ultimate" title={ultimateTitle}
+              disabled={!view.ultimateUnlocked || me.ultimateUsed} onClick={() => { setMode(null); setPath([]); setScanning(true); }} />
             <button className="btn ghost" onClick={() => { setMode(null); act({ type: 'endTurn' }); }}>Pass</button>
           </>
         )}

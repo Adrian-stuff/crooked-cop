@@ -291,6 +291,13 @@ export function searchArea(station: string): string[] {
   return [...seen];
 }
 
+// Every station on a line, in map order.
+export function lineStations(lineId: string): string[] {
+  const line = LINES.find((l) => l.id === lineId);
+  if (!line) return [];
+  return [...new Set(line.segments.flat().filter((p): p is string => typeof p === 'string'))];
+}
+
 // BFS hop distances from a station.
 export function distancesFrom(start: string): Record<string, number> {
   const dist: Record<string, number> = { [start]: 0 };

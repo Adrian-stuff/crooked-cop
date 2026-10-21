@@ -41,8 +41,9 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
   const [hoverEnv, setHoverEnv] = useState<string | null>(null);
   const [pinnedEnv, setPinnedEnv] = useState<string | null>(null);
   const shownEnv = view.envelopes.find((e) => e.id === (hoverEnv ?? pinnedEnv));
-  const swept = shownEnv?.search?.area
-    ?? view.envelopes.filter((e) => e.kind === 'search' && e.to === view.me && e.round === view.round).at(-1)?.search?.area;
+  const areaOf = (e?: (typeof view.envelopes)[number]) => e?.search?.area ?? e?.scan?.stations;
+  const swept = areaOf(shownEnv)
+    ?? areaOf(view.envelopes.filter((e) => (e.kind === 'search' || e.kind === 'ultimate') && e.to === view.me && e.round === view.round).at(-1));
   // Stations where your own searches spotted a Heister in the last 3 rounds (latest per station).
   const lastSeen = useMemo(() => {
     if (view.godView) return [];

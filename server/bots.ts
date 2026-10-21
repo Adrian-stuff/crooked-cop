@@ -2,7 +2,7 @@
 // Usage: npm run bots -- <ROOM> [count]
 
 import WebSocket from 'ws';
-import { ADJ, STATIONS, neighbours } from '../shared/map';
+import { ADJ, STATIONS, linesAt, neighbours } from '../shared/map';
 import type { ClientMsg, ServerMsg } from '../shared/protocol';
 import type { Action, View } from '../shared/types';
 
@@ -96,7 +96,9 @@ function play(v: View, send: (m: ClientMsg) => void) {
   } else if (v.phase === 'police' && officer && !me.done && me.station && v.policeTurn === me.id) {
     // One action per turn: sometimes arrest, otherwise search a neighbour (which moves there) or just move.
     const near = neighbours(me.station).filter((s) => !v.exitMustClear.includes(s));
-    if (Math.random() < 0.15 && !me.cannotArrest && v.arrestsLeft > 0) {
+    if (v.ultimateUnlocked && !me.ultimateUsed && Math.random() < 0.2) {
+      act({ type: 'ultimate', line: rnd(linesAt(me.station)) });
+    } else if (Math.random() < 0.15 && !me.cannotArrest && v.arrestsLeft > 0) {
       act({ type: 'arrest', station: rnd(ADJ[me.station].map((n) => n.to).filter((s) => !v.exits.includes(s))) });
     } else if (Math.random() < 0.6 && v.settings.searchRange > 0) {
       act({ type: 'search', station: rnd(near) });

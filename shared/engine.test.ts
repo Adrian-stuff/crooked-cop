@@ -298,6 +298,48 @@ describe('search', () => {
   });
 });
 
+describe('police ultimate', () => {
+  // One Heister on Recto (Purple). Officers: the first two in seat order start on Lawton (Purple/Orange interchange).
+  function ready(carried: number) {
+    let g = setup(4);
+    const [h] = byRole(g, 'heister');
+    const cops = g.players.filter((p) => p.role === 'police' || p.role === 'traitor');
+    g = placeAll(g, { [h.id]: 'recto', [cops[0].id]: 'lawton', [cops[1].id]: 'lawton', [cops[2].id]: 'quirino' });
+    g.players.find((p) => p.id === h.id)!.carried = carried;
+    g = act(g, h.id, { type: 'endTurn' });
+    return { g, cops };
+  }
+
+  it('stays locked until the Heisters have taken 3 Artifacts', () => {
+    const { g, cops } = ready(2);
+    expect(g.ultimateUnlocked).toBe(false);
+    expect(() => act(g, cops[0].id, { type: 'ultimate', line: 'purple' })).toThrow(/unlocks once/);
+  });
+
+  it('scans one line through the officer\'s station, once per game, using their action', () => {
+    const { g: start, cops } = ready(3);
+    let g = start;
+    expect(g.ultimateUnlocked).toBe(true);
+    expect(viewFor(g, cops[0].id, T0).ultimateUnlocked).toBe(true);
+    expect(() => act(g, cops[0].id, { type: 'ultimate', line: 'blue' })).toThrow(/through your station/);
+    g = act(g, cops[0].id, { type: 'ultimate', line: 'orange' });
+    const first = g.envelopes.at(-1)!;
+    expect(first).toMatchObject({ to: cops[0].id, kind: 'ultimate', scan: { line: 'orange', from: 'lawton', found: false } });
+    expect(g.players.find((p) => p.id === cops[0].id)!).toMatchObject({ done: true, station: 'lawton', ultimateUsed: true });
+    expect(g.roundActions.at(-1)).toMatchObject({ by: cops[0].id, kind: 'ultimate', line: 'orange' });
+    expect(g.log.at(-1)!.text).not.toMatch(/Heister/); // the result stays in the envelope
+
+    g = act(g, cops[1].id, { type: 'ultimate', line: 'purple' });
+    expect(g.envelopes.at(-1)!.scan!.found).toBe(true);
+
+    // Next round the first officer's card is spent.
+    let t = T0;
+    while (g.phase !== 'police' || g.round !== 2) g = act(g, cops[0].id, { type: 'tick' }, (t += 61_000));
+    while (g.policeTurn !== cops[0].id) g = act(g, g.policeTurn!, { type: 'endTurn' }, t);
+    expect(() => act(g, cops[0].id, { type: 'ultimate', line: 'purple' }, t)).toThrow(/already played/);
+  });
+});
+
 describe('one action per officer', () => {
   it('ends the turn after a single Move, Search or Arrest', () => {
     let g = placeAll(setup(6));

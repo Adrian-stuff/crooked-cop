@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { stationLabel } from '../../shared/map';
-import type { Envelope, SearchResult, TipResult, View } from '../../shared/types';
+import { LINES, lineName, stationLabel } from '../../shared/map';
+import type { Envelope, ScanResult, SearchResult, TipResult, View } from '../../shared/types';
 import { SPECTATOR_IDENTITY, type Identity } from '../game/identity';
 import { TokenIcon } from './Token';
 
@@ -43,6 +43,17 @@ function SearchRows({ r }: { r: SearchResult }) {
   );
 }
 
+function ScanRows({ r }: { r: ScanResult }) {
+  return (
+    <ul className="env-rows">
+      {r.found
+        ? <li className="danger"><i aria-hidden="true">!</i><span><strong>A Heister is on the {lineName(r.line)} line</strong> right now</span></li>
+        : <li className="clear"><i aria-hidden="true">✓</i><span>No Heister on the {lineName(r.line)} line right now</span></li>}
+      <li><i aria-hidden="true">·</i><span>Scanned from {stationLabel(r.from)} across {r.stations.length} stations</span></li>
+    </ul>
+  );
+}
+
 function TipRows({ tip, view, ids }: { tip: TipResult[]; view: View; ids: Props['ids'] }) {
   return (
     <ul className="env-rows">
@@ -64,6 +75,14 @@ function Summary({ e, ids }: { e: Envelope; ids: Props['ids'] }) {
   if (e.search) {
     const o = outcome(e.search);
     return <><span className="env-what">{stationLabel(e.search.station)}</span><span className={`env-chip ${o.tone}`}>{o.text}</span></>;
+  }
+  if (e.scan) {
+    return (
+      <>
+        <span className="env-what"><i className="line-swatch" style={{ background: LINES.find((l) => l.id === e.scan!.line)?.color }} />{lineName(e.scan.line)} line</span>
+        <span className={`env-chip ${e.scan.found ? 'danger' : 'clear'}`}>{e.scan.found ? 'Heister on line' : 'Line clear'}</span>
+      </>
+    );
   }
   if (e.tip) {
     return (
@@ -89,7 +108,8 @@ export function Envelopes({ view, ids, highlight, onHighlight }: Props) {
 
   const all = [...view.envelopes].reverse();
   const hasTips = all.some((e) => e.kind === 'traitor');
-  const list = all.filter((e) => filter === 'all' || e.kind === filter);
+  // Ultimate scans sit with the searches.
+  const list = all.filter((e) => filter === 'all' || e.kind === filter || (filter === 'search' && e.kind === 'ultimate'));
   const to = (e: Envelope) => (view.godView ? view.players.find((p) => p.id === e.to)?.name : null);
 
   return (
@@ -117,23 +137,24 @@ export function Envelopes({ view, ids, highlight, onHighlight }: Props) {
               <header>
                 <button className="env-toggle" onClick={toggle} aria-expanded={isOpen}>
                   <span className="env-round">R{e.round}</span>
-                  {isOpen ? <span className="env-what">{e.search ? stationLabel(e.search.station) : e.tip ? 'Crooked tip-off' : e.title}</span>
+                  {isOpen ? <span className="env-what">{e.search ? stationLabel(e.search.station) : e.scan ? `Ultimate: ${lineName(e.scan.line)} line` : e.tip ? 'Crooked tip-off' : e.title}</span>
                     : <Summary e={e} ids={ids} />}
                   {to(e) && <span className="env-to">· {to(e)}</span>}
                   <span className="env-caret" aria-hidden="true" />
                 </button>
-                {isOpen && e.search && (
-                  <button className={`env-area ${highlight === e.id ? 'on' : ''}`} title="Show the swept stations on the map"
+                {isOpen && (e.search || e.scan) && (
+                  <button className={`env-area ${highlight === e.id ? 'on' : ''}`} title={e.scan ? 'Show the scanned line on the map' : 'Show the swept stations on the map'}
                     onMouseEnter={() => onHighlight(e.id)} onMouseLeave={() => onHighlight(null)}
                     onFocus={() => onHighlight(e.id)} onBlur={() => onHighlight(null)}
                     onClick={() => onHighlight(e.id, true)}>
-                    {e.search.area.length} stations
+                    {(e.search?.area ?? e.scan!.stations).length} stations
                   </button>
                 )}
               </header>
               {isOpen && (
                 <div className="env-body">
                   {e.search ? <SearchRows r={e.search} />
+                    : e.scan ? <ScanRows r={e.scan} />
                     : e.tip ? <TipRows tip={e.tip} view={view} ids={ids} />
                       : <ul className="env-lines">{e.lines.map((l, j) => <li key={j}>{l}</li>)}</ul>}
                 </div>

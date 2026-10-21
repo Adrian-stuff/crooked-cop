@@ -42,23 +42,33 @@ export interface Player {
   skipPoliceRound?: number; // wrong-arrest penalty
   noArrestRound?: number; // wrongly-accused penalty
   moved: boolean;
-  acted: 'search' | 'arrest' | null;
+  acted: 'search' | 'arrest' | 'ultimate' | null;
   envelopeGiven: boolean;
   autoPlaced?: boolean; // placed at random when setup timed out
   cleared?: boolean; // voted on and shown not to be the Crooked Cop
   expressRound?: number; // round a Heister last took the Express
   afk?: boolean; // let their timer run out without acting; cleared when they act
+  ultimateUsed?: boolean; // officer has played their one Police Ultimate card
 }
 
 export interface Envelope {
   id: string;
   to: string;
   round: number;
-  kind: 'search' | 'traitor' | 'clue';
+  kind: 'search' | 'traitor' | 'clue' | 'ultimate';
   title: string;
   lines: string[]; // plain-text version, for older clients and saved games
   search?: SearchResult;
   tip?: TipResult[];
+  scan?: ScanResult;
+}
+
+// What a Police Ultimate found: whether any Heister is on the chosen line right now.
+export interface ScanResult {
+  line: string;
+  from: string; // the officer's station
+  stations: string[]; // every station on the line
+  found: boolean;
 }
 
 // What a Search found, so the client can lay it out instead of reading sentences.
@@ -110,9 +120,10 @@ export interface Tipoff {
 // An officer's action this round. All of these are announced in the log, so everyone may see them.
 export interface RoundAction {
   by: string;
-  kind: 'move' | 'search' | 'arrest' | 'pass';
+  kind: 'move' | 'search' | 'arrest' | 'ultimate' | 'pass';
   station: string;
   ok?: boolean; // arrests: whether anyone was caught
+  line?: string; // ultimates: the line that was scanned
 }
 
 export interface Visit {
@@ -150,6 +161,7 @@ export interface GameState {
   tipoff: Tipoff | null; // where the Heisters were at the Crooked Cop's latest tip-off
   roundActions: RoundAction[]; // officers' public actions this round
   takenThisRound: number; // Artifacts taken in this round's Heister Phase (as announced)
+  ultimateUnlocked: boolean; // the Heisters have taken enough Artifacts for officers to play their Ultimate
 }
 
 export type Action =
@@ -160,6 +172,7 @@ export type Action =
   | { type: 'move'; path: string[]; express: boolean }
   | { type: 'search'; station: string }
   | { type: 'arrest'; station: string }
+  | { type: 'ultimate'; line: string }
   | { type: 'endTurn' }
   | { type: 'accuse'; target: string }
   | { type: 'vote'; yes: boolean }
@@ -182,10 +195,11 @@ export interface PublicPlayer {
   skipsPolice: boolean;
   cannotArrest: boolean;
   moved: boolean;
-  acted: 'search' | 'arrest' | null;
+  acted: 'search' | 'arrest' | 'ultimate' | null;
   cleared: boolean;
   expressCooldown: boolean; // Heister used Express last round (Heister team and facilitator only)
   afk: boolean;
+  ultimateUsed: boolean;
 }
 
 export interface View {
@@ -218,6 +232,7 @@ export interface View {
   tipoff: Tipoff | null; // only for the Crooked Cop
   roundActions: RoundAction[];
   takenThisRound: number;
+  ultimateUnlocked: boolean;
 }
 
 export type ChatChannel = 'lobby' | 'police' | 'heisters' | `dm:${string}`;

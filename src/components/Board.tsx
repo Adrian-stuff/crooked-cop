@@ -179,8 +179,10 @@ function ChatBubbles({ chat, pawns }: { chat: ChatMessage[]; pawns: { p: PublicP
   );
 }
 
-const DID_GLYPH: Record<RoundAction['kind'], string> = { move: '→', search: 'S', arrest: '!', pass: '–' };
-const DID_TEXT: Record<RoundAction['kind'], string> = { move: 'Moved this round', search: 'Searched this round', arrest: 'Tried an arrest this round', pass: 'Passed this round' };
+const DID_GLYPH: Record<RoundAction['kind'], string> = { move: '→', search: 'S', arrest: '!', ultimate: 'U', pass: '–' };
+const DID_TEXT: Record<RoundAction['kind'], string> = {
+  move: 'Moved this round', search: 'Searched this round', arrest: 'Tried an arrest this round', ultimate: 'Played the Ultimate this round', pass: 'Passed this round',
+};
 
 // What happened on the map this round: teammates' sweeps, failed arrests, and Heisters you've spotted.
 function RoundMarks({ view, lastSeen }: { view: View; lastSeen: { station: string; round: number }[] }) {
