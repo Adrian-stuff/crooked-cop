@@ -1,0 +1,64 @@
+/* ---------- Facilitator mode (physical board) ---------- */
+.table-top-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+.table-lobby { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+.table-title { font-family: var(--display); font-weight: 400; font-size: 26px; color: var(--cream); margin: 0 0 4px; }
+.table-add { margin-bottom: 8px; }
+.table-add input { flex: 1; }
+.table-lobby .seat-list select { width: auto; }
+.table-deal { border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px; margin: 12px 0 0; }
+.table-deal legend { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; padding: 0 4px; }
+.table-deal .check { margin: 8px 0; }
+
+.table-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.table-show { margin-left: auto; }
+
+.recorder {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 12px; border: 1px dashed var(--slate); border-radius: var(--radius); background: #0f1116;
+}
+.recorder-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.recorder-who {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 6px; cursor: pointer;
+  font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px;
+}
+.recorder-who small { color: var(--muted); font-size: 11px; }
+.recorder-who.selected { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); background: #2a2516; }
+.recorder-who:disabled { opacity: 0.45; cursor: default; }
+
+.vote-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; flex: 1 1 320px; }
+.vote-rows li { display: flex; align-items: center; gap: 8px; }
+.vote-rows .pname { flex: 1; }
+
+.table-notes h3 { margin-top: 0; }
+.table-notes form { display: flex; gap: 8px; }
+.table-notes input { flex: 1; min-width: 0; }
+
+/* A full-screen timer the facilitator can turn towards the players. Nothing secret on it. */
+.public-timer {
+  position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 24px; text-align: center; cursor: pointer; background: radial-gradient(ellipse at 50% 30%, #1f3a5f66, transparent 65%), var(--bg);
+}
+.public-timer.phase-bg-heister { background: radial-gradient(ellipse at 50% 30%, #b33a3a55, transparent 65%), var(--bg); }
+.public-timer.phase-bg-info { background: radial-gradient(ellipse at 50% 30%, #3f7d4f55, transparent 65%), var(--bg); }
+.pt-round { font-size: 18px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+.pt-phase { font-family: var(--display); font-size: clamp(36px, 7vw, 72px); color: var(--cream); line-height: 1; }
+.pt-up { font-size: clamp(18px, 3vw, 28px); color: var(--gold); }
+.pt-clock { font-family: var(--display); font-size: clamp(96px, 26vw, 280px); line-height: 1; font-variant-numeric: tabular-nums; }
+.pt-clock.urgent { color: #ff6b6b; animation: pulse 1s infinite; }
+.pt-clock.paused { opacity: 0.5; }
+.pt-note { font-size: 20px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.2em; }
+.pt-taken { display: flex; align-items: center; gap: 10px; font-size: clamp(16px, 2.4vw, 22px); color: #f2d58a; }
+.pt-hint { position: absolute; bottom: 20px; font-size: 13px; color: var(--muted); }
+
+@media (max-width: 1100px) {
+  .table-lobby { grid-template-columns: 1fr; }
+  .table-screen .side-col > .panel:not(.envelopes) { order: 3; }
+}
+@media (max-width: 700px) {
+  .table-show { margin-left: 0; }
+}
+
+.home-table { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }

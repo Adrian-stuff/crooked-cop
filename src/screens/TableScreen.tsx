@@ -1,0 +1,369 @@
+import { useEffect, useMemo, useState } from 'react';
+import { escapeTarget } from '../../shared/engine';
+import { STATIONS } from '../../shared/map';
+import type { PublicPlayer, View } from '../../shared/types';
+import { ActionDock, RoundRecap } from '../components/ActionDock';
+import { Board, type Mark } from '../components/Board';
+import { Envelopes } from '../components/Envelopes';
+import { Log, PhaseBanner, PlayerList, RevealCard, useCountdown } from '../components/Panels';
+import { StationPopover } from '../components/StationPopover';
+import { StatusStrip } from '../components/StatusStrip';
+import { TokenIcon } from '../components/Token';
+import { SPECTATOR_IDENTITY, seatIdentities, tokenText, type Identity } from '../game/identity';
+import { actsThisPhase, marksFor, type Mode } from '../game/selection';
+import { downloadRecord, useTableGame, type TableGame } from '../net/useTableGame';
+import { TableLobby } from './TableLobby';
+import '../table.css';
+
+const PHASE_NAME: Record<string, string> = {
+  lobby: 'Lobby', setup: 'Setup', heister: 'Heister Phase', police: 'Police Phase', info: 'Information Phase', ended: 'Case closed',
+};
+
+const isOfficer = (role: string) => role === 'police' || role === 'traitor';
+const clock = (ms: number) => {
+  const secs = Math.ceil(ms / 1000);
+  return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+};
+
+export function TableApp({ onExit }: { onExit: () => void }) {
+  const table = useTableGame();
+  const { error, clearError } = table;
+
+  useEffect(() => {
+    if (!table.save) onExit();
+  }, [table.save, onExit]);
+
+  useEffect(() => {
+    if (!error) return;
+    const id = setTimeout(clearError, 4000);
+    return () => clearTimeout(id);
+  }, [error, clearError]);
+
+  if (!table.view) return null;
+  return (
+    <>
+      {table.view.phase === 'lobby' ? <TableLobby table={table} view={table.view} /> : <TableScreen table={table} view={table.view} />}
+      {error && <div className="toast" role="alert" onClick={clearError}>{error}</div>}
+    </>
+  );
+}
+
+export function TableTopBar({ table }: { table: TableGame }) {
+  const playing = table.view?.phase !== 'lobby';
+  const end = () => {
+    const msg = playing
+      ? 'End this game? Its log and clues are deleted from this device. Use "Export record" first to keep them.'
+      : 'Leave facilitator mode?';
+    if (confirm(msg)) table.endSession();
+  };
+  return (
+    <header className="topbar">
+      <div className="brand">
+        <img src="/assets/logo-crooked-cop-128.png" alt="" width={36} height={36} />
+        <span>The Crooked Cop</span>
+      </div>
+      <span className="tag gold">Facilitator mode</span>
+      <div className="table-top-actions">
+        {playing && (
+          <>
+            <button className="btn ghost small" disabled={!table.canUndo} onClick={table.undo} title="Take back the last thing you recorded">Undo</button>
+            <button className="btn ghost small" onClick={() => table.save && downloadRecord(table.save.state)}>Export record</button>
+          </>
+        )}
+        <button className="btn ghost small" onClick={end}>{playing ? 'End game' : 'Exit'}</button>
+      </div>
+    </header>
+  );
+}
+
+// Pause, add time, and a big public timer to turn towards the table.
+function TimerBar({ table, view, onShow }: { table: TableGame; view: View; onShow: () => void }) {
+  const running = view.deadline !== null;
+  const paused = table.paused;
+  if (view.phase === 'ended') return null;
+  return (
+    <div className="table-bar">
+      {paused !== null && <span className="chip warn">Timer paused · {clock(paused)} left</span>}
+      {paused !== null
+        ? <button className="btn primary small" onClick={table.resume}>Resume timer</button>
+        : <button className="btn small" disabled={!running} onClick={table.pause}>Pause timer</button>}
+      <button className="btn ghost small" disabled={!running && paused === null} onClick={() => table.addTime(30)}>+30s</button>
+      <button className="btn ghost small" disabled={!running && paused === null} onClick={() => table.addTime(60)}>+1 min</button>
+      <button className="btn ghost small table-show" onClick={onShow} title="A full-screen timer with nothing secret on it">Show timer to table</button>
+    </div>
+  );
+}
+
+// Safe to show the players: phase, time, round and public totals only.
+function PublicTimer({ table, view, onClose }: { table: TableGame; view: View; onClose: () => void }) {
+  const secs = useCountdown(view.deadline, 0);
+  const shown = table.paused !== null ? clock(table.paused) : secs === null ? '' : clock(secs * 1000);
+  const up = view.phase === 'police' ? view.players.find((p) => p.id === view.policeTurn) : null;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className={`public-timer phase-bg-${view.phase}`} onClick={onClose} role="dialog" aria-label="Table timer">
+      <div className="pt-round">Round {Math.max(view.round, 0)} of {view.settings.maxRounds}</div>
+      <div className="pt-phase">{PHASE_NAME[view.phase]}</div>
+      {up && <div className="pt-up">{up.name}'s turn</div>}
+      <div className={`pt-clock ${table.paused !== null ? 'paused' : secs !== null && secs <= 10 ? 'urgent' : ''}`}>{shown || '—'}</div>
+      {table.paused !== null && <div className="pt-note">Paused</div>}
+      {view.phase !== 'setup' && (
+        <div className="pt-taken">
+          <img src="/assets/artifact.png" alt="" width={28} height={28} />
+          {view.announcedTaken} of {view.settings.artifactCount} Artifacts taken · escape needs {escapeTarget(view.settings)}
+        </div>
+      )}
+      <div className="pt-hint">Tap anywhere to go back</div>
+    </div>
+  );
+}
+
+// Whose move is being recorded. In setup and the Heister Phase the facilitator can pick the order;
+// officers always go in seat order.
+function Recorder({ view, actor, ids, onPick }: { view: View; actor: string | null; ids: Record<string, Identity>; onPick: (id: string) => void }) {
+  const waiting = view.players.filter((p) => actsThisPhase(view.phase, p) && !p.done);
+  if (!waiting.length || view.phase === 'info' || view.phase === 'ended') return null;
+  const choosable = view.phase === 'setup' || view.phase === 'heister';
+  const roleName = (p: PublicPlayer) => (p.role === 'heister' ? `${p.label} Heister` : p.role === 'traitor' ? 'Crooked Cop' : 'Officer');
+  return (
+    <div className="recorder" role="group" aria-label="Recording for">
+      <span className="recorder-label">Recording for</span>
+      {waiting.map((p) => (
+        <button key={p.id} className={`recorder-who ${p.id === actor ? 'selected' : ''}`} aria-pressed={p.id === actor}
+          disabled={!choosable && p.id !== actor} onClick={() => onPick(p.id)}>
+          <TokenIcon role={p.role} identity={ids[p.id] ?? SPECTATOR_IDENTITY} text={tokenText(p)} size={24} />
+          <span>{p.name}</span>
+          <small>{roleName(p)}</small>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Information Phase: record an accusation and each officer's vote, then move on.
+function InfoRecorder({ table, view, ids }: { table: TableGame; view: View; ids: Record<string, Identity> }) {
+  const [by, setBy] = useState('');
+  const [target, setTarget] = useState('');
+  const officers = view.players.filter((p) => isOfficer(p.role) && p.status === 'active');
+  const waiting = view.players.filter((p) => (isOfficer(p.role) || p.role === 'heister') && p.status === 'active' && !p.done);
+  const acc = view.accusation;
+  const token = (p: PublicPlayer, size = 26) => <TokenIcon role={p.role} identity={ids[p.id] ?? SPECTATOR_IDENTITY} text={tokenText(p)} size={size} />;
+  const end = (
+    <button className="btn primary" disabled={!!acc} title={acc ? 'Finish the vote first' : undefined}
+      onClick={() => table.record(waiting.map((p) => [p.id, { type: 'ready' }]))}>
+      End Information Phase
+    </button>
+  );
+
+  if (acc) {
+    const accused = view.players.find((p) => p.id === acc.target)!;
+    const accuser = view.players.find((p) => p.id === acc.by);
+    const yes = officers.filter((o) => acc.votes[o.id] === true).length;
+    const no = officers.filter((o) => acc.votes[o.id] === false).length;
+    const need = Math.floor(officers.length / 2) + 1;
+    return (
+      <section className="dock accusing" aria-label="Record the vote">
+        <div className="dock-text">
+          <h2>Vote: is {accused.name} the Crooked Cop?</h2>
+          <p>{accuser?.name ?? 'An officer'} called it. Record each officer's vote. Guilty {yes} · Not guilty {no} · {need} needed. The result shows as soon as it's decided.</p>
+        </div>
+        <ul className="vote-rows">
+          {officers.map((o) => (
+            <li key={o.id}>
+              {token(o)}<span className="pname">{o.name}</span>
+              <button className={`btn small arrest ${acc.votes[o.id] === true ? 'selected' : ''}`} aria-pressed={acc.votes[o.id] === true}
+                onClick={() => table.actAs(o.id, { type: 'vote', yes: true })}>Guilty</button>
+              <button className={`btn small ${acc.votes[o.id] === false ? 'selected' : ''}`} aria-pressed={acc.votes[o.id] === false}
+                onClick={() => table.actAs(o.id, { type: 'vote', yes: false })}>Not guilty</button>
+            </li>
+          ))}
+        </ul>
+      </section>
+    );
+  }
+
+  const suspects = officers.filter((p) => p.id !== by);
+  return (
+    <section className="dock" aria-label="Information Phase">
+      <div className="dock-recap"><RoundRecap view={view} /></div>
+      <div className="dock-text">
+        <h2>Information Phase</h2>
+        <p>Players compare notes. {view.accusationUsed ? "This round's vote has been used." : 'If an officer calls a vote on the Crooked Cop, record it here.'}</p>
+      </div>
+      <div className="dock-actions">
+        {!view.accusationUsed && officers.length > 1 && (
+          <>
+            <select value={by} onChange={(e) => { setBy(e.target.value); if (e.target.value === target) setTarget(''); }} aria-label="Officer calling the vote">
+              <option value="">Who calls the vote?</option>
+              {officers.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+            <select value={target} onChange={(e) => setTarget(e.target.value)} disabled={!by} aria-label="Accused officer">
+              <option value="">Accusing…</option>
+              {suspects.map((o) => <option key={o.id} value={o.id}>{o.name}{o.cleared ? ' (cleared)' : ''}</option>)}
+            </select>
+            <button className="btn arrest" disabled={!by || !target}
+              onClick={() => { table.actAs(by, { type: 'accuse', target }); setBy(''); setTarget(''); }}>Start vote</button>
+          </>
+        )}
+        {end}
+      </div>
+    </section>
+  );
+}
+
+function Notes({ table }: { table: TableGame }) {
+  const [text, setText] = useState('');
+  return (
+    <section className="panel table-notes">
+      <h3>Add to the log</h3>
+      <form onSubmit={(e) => { e.preventDefault(); if (text.trim()) { table.note(text); setText(''); } }}>
+        <input value={text} onChange={(e) => setText(e.target.value)} maxLength={200} placeholder="Rulings, disputes, anything worth keeping" aria-label="Note" />
+        <button className="btn small" disabled={!text.trim()}>Add note</button>
+      </form>
+    </section>
+  );
+}
+
+export function TableScreen({ table, view }: { table: TableGame; view: View }) {
+  const ids = useMemo(() => seatIdentities(view.players), [view.players]);
+  const waiting = view.players.filter((p) => actsThisPhase(view.phase, p) && !p.done);
+  const [chosen, setChosen] = useState<string | null>(null);
+  const actor = view.phase === 'police' ? view.policeTurn
+    : view.phase === 'setup' || view.phase === 'heister' ? (waiting.find((p) => p.id === chosen) ?? waiting[0])?.id ?? null
+      : null;
+  const actorView = actor ? table.viewAs(actor) : null;
+  const act = (a: Parameters<TableGame['act']>[0]) => (actor ? table.actAs(actor, a) : table.act(a));
+
+  const [mode, setMode] = useState<Mode>(null);
+  const [path, setPath] = useState<string[]>([]);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [editArtifacts, setEditArtifacts] = useState(false);
+  const [showTimer, setShowTimer] = useState(false);
+  const [showTrails, setShowTrails] = useState(true);
+  const [focus, setFocus] = useState<string | null>(null);
+  const [hoverEnv, setHoverEnv] = useState<string | null>(null);
+  const [pinnedEnv, setPinnedEnv] = useState<string | null>(null);
+
+  // A new player to record for starts fresh; in setup they go straight to picking a station.
+  useEffect(() => {
+    setPath([]);
+    setPicked(null);
+    setMode(view.phase === 'setup' && actor ? 'start' : null);
+  }, [view.phase, view.round, actor]);
+
+  useEffect(() => {
+    if (view.phase !== 'setup') setEditArtifacts(false);
+  }, [view.phase]);
+
+  const marks = useMemo((): Record<string, Mark> => {
+    if (editArtifacts) return Object.fromEntries(STATIONS.filter((s) => !view.exits.includes(s.id)).map((s) => [s.id, 'candidate' as Mark]));
+    return mode && actorView ? marksFor(actorView, mode, path) : {};
+  }, [editArtifacts, mode, actorView, path, view.exits]);
+
+  const shownEnv = view.envelopes.find((e) => e.id === (hoverEnv ?? pinnedEnv));
+  const swept = shownEnv?.search?.area ?? view.envelopes.filter((e) => e.kind === 'search' && e.round === view.round).at(-1)?.search?.area;
+  const highlightEnv = (id: string | null, pin?: boolean) => {
+    if (pin) setPinnedEnv((p) => (p === id ? null : id));
+    else setHoverEnv(id);
+  };
+
+  const onStation = (id: string) => {
+    if (editArtifacts) return table.toggleArtifact(id);
+    if (!actor) return;
+    if (mode === 'start') {
+      // One tap places and locks in the player's start, then the next player is up.
+      table.actAs(actor, { type: 'chooseStart', station: id }, { type: 'ready' });
+    } else if (mode === 'move' || mode === 'express') {
+      if (path.at(-1) === id) setPath(path.slice(0, -1));
+      else if (marks[id] === 'candidate') setPath([...path, id]);
+    } else if (mode === 'search') {
+      table.actAs(actor, { type: 'search', station: id });
+      setMode(null);
+    } else if (mode === 'arrest') {
+      table.actAs(actor, { type: 'arrest', station: id });
+      setMode(null);
+    }
+  };
+
+  const seatedView = { ...view, players: view.players.filter((p) => p.role !== 'spectator') };
+  const artifactsLeft = Object.values(view.artifacts ?? {}).reduce((a, b) => a + b, 0);
+
+  return (
+    <div className="app game-screen table-screen">
+      <TableTopBar table={table} />
+      <main className="game">
+        <div className="board-col">
+          <TimerBar table={table} view={view} onShow={() => setShowTimer(true)} />
+          <div className="board-wrap">
+            <StatusStrip view={view} offset={0} ids={ids} />
+            <div className="board-scroll">
+              <div className="board-stage">
+                <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails} showNames
+                  focus={focus} onFocus={setFocus} selected={picked} swept={swept}
+                  onPick={(id) => setPicked(mode || editArtifacts || id === picked ? null : id)} />
+                {picked && !mode && (
+                  <StationPopover view={actorView ?? view} station={picked} ids={ids} act={act} onClose={() => setPicked(null)} />
+                )}
+              </div>
+            </div>
+            <div className="legend">
+              <span><img src="/assets/artifact.png" alt="" width={16} height={16} /> {artifactsLeft} Artifact{artifactsLeft === 1 ? '' : 's'} on the board</span>
+              {view.phase === 'setup' && (
+                <button className={`btn small ${editArtifacts ? 'selected' : ''}`} aria-pressed={editArtifacts}
+                  onClick={() => { setEditArtifacts(!editArtifacts); setPicked(null); }}>
+                  {editArtifacts ? 'Done placing Artifacts' : 'Move Artifacts to match the board'}
+                </button>
+              )}
+              {view.trails && (
+                <label className="check small">
+                  <input type="checkbox" checked={showTrails} onChange={(e) => setShowTrails(e.target.checked)} /> Heister trails
+                </label>
+              )}
+            </div>
+          </div>
+          {editArtifacts ? (
+            <section className="dock">
+              <div className="dock-text">
+                <h2>Placing Artifacts</h2>
+                <p>Tap a station to add or remove an Artifact. {artifactsLeft} placed, so a Heister escapes with {Math.ceil(artifactsLeft / 2)}.</p>
+              </div>
+              <button className="btn primary" onClick={() => setEditArtifacts(false)}>Done</button>
+            </section>
+          ) : (
+            <>
+              <Recorder view={view} actor={actor} ids={ids} onPick={setChosen} />
+              {view.phase === 'info'
+                ? <InfoRecorder table={table} view={view} ids={ids} />
+                : <ActionDock key={`${view.phase}:${actor}`} view={actorView ?? view} mode={mode} path={path}
+                  setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={act} />}
+            </>
+          )}
+          <div className="below-board">
+            <PlayerList view={seatedView} ids={ids} focus={focus} setFocus={setFocus} />
+            <Log view={view} />
+          </div>
+        </div>
+        <aside className="side-col">
+          <Envelopes view={view} ids={ids} highlight={hoverEnv ?? pinnedEnv} onHighlight={highlightEnv} />
+          <Notes table={table} />
+          {view.phase === 'ended' && (
+            <section className="panel">
+              <h3>Game over</h3>
+              <p className="muted small">Save the full record: players and roles, the log round by round, and every clue handed out.</p>
+              <button className="btn primary" onClick={() => table.save && downloadRecord(table.save.state)}>Export record</button>
+            </section>
+          )}
+        </aside>
+      </main>
+      <PhaseBanner view={view} />
+      <RevealCard view={view} />
+      {showTimer && <PublicTimer table={table} view={view} onClose={() => setShowTimer(false)} />}
+    </div>
+  );
+}

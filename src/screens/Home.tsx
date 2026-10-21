@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Game } from '../net/useGame';
 
-export function Home({ game }: { game: Game }) {
+export function Home({ game, onTable }: { game: Game; onTable: () => void }) {
   const initialCode = new URLSearchParams(location.search).get('room')?.toUpperCase() ?? '';
   const [name, setName] = useState(() => {
     try { return localStorage.getItem('crooked-cop-name') ?? ''; } catch { return ''; }
@@ -38,6 +38,11 @@ export function Home({ game }: { game: Game }) {
           </div>
         </div>
         {game.conn !== 'open' && <p className="muted small">Connecting to the server…</p>}
+        <div className="home-table">
+          <span className="muted small">Playing on the physical board?</span>
+          <button className="btn ghost" onClick={onTable}>Facilitator mode</button>
+          <span className="muted small">One device records the timer, log, clues and Artifacts. Works offline.</span>
+        </div>
       </div>
       <footer className="credits">
         <span className="muted small">A game by</span>
