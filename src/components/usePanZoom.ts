@@ -12,6 +12,8 @@ export interface UsePanZoomOptions {
   minScale?: number;
   maxScale?: number;
   initialScale?: number;
+  panSpeed?: number;
+  zoomSpeed?: number;
 }
 
 const DRAG_THRESHOLD = 8; // Pixels moved before registering as a drag gesture
@@ -20,6 +22,8 @@ export function usePanZoom({
   minScale = 1.0,
   maxScale = 4.0,
   initialScale = 1.0,
+  panSpeed = 0.8,
+  zoomSpeed = 0.001,
 }: UsePanZoomOptions = {}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -140,11 +144,11 @@ export function usePanZoom({
   );
 
   const zoomIn = useCallback(() => {
-    zoomTo(transformRef.current.scale * 1.35);
+    zoomTo(transformRef.current.scale * 1.2);
   }, [zoomTo]);
 
   const zoomOut = useCallback(() => {
-    zoomTo(transformRef.current.scale / 1.35);
+    zoomTo(transformRef.current.scale / 1.2);
   }, [zoomTo]);
 
   const reset = useCallback(() => {
@@ -264,8 +268,8 @@ export function usePanZoom({
           }
         }
 
-        const rawX = startTransformRef.current.x + dx;
-        const rawY = startTransformRef.current.y + dy;
+        const rawX = startTransformRef.current.x + dx * panSpeed;
+        const rawY = startTransformRef.current.y + dy * panSpeed;
         const { x: newX, y: newY } = clampPosition(rawX, rawY, transformRef.current.scale);
 
         transformRef.current.x = newX;
@@ -281,8 +285,9 @@ export function usePanZoom({
         const currentDist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
         const currentCenter = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
 
-        const factor = currentDist / (initialPinchRef.current.dist || 1);
-        const nextScale = Math.min(maxScale, Math.max(minScale, initialPinchRef.current.scale * factor));
+        const rawRatio = currentDist / (initialPinchRef.current.dist || 1);
+        const dampedRatio = 1 + (rawRatio - 1) * 0.7;
+        const nextScale = Math.min(maxScale, Math.max(minScale, initialPinchRef.current.scale * dampedRatio));
 
         const rect = container.getBoundingClientRect();
         const px = initialPinchRef.current.center.x - rect.left;
@@ -298,8 +303,8 @@ export function usePanZoom({
         const cx = (px - origLeft - initialPinchRef.current.transform.x) / initialPinchRef.current.scale;
         const cy = (py - origTop - initialPinchRef.current.transform.y) / initialPinchRef.current.scale;
 
-        const panDx = currentCenter.x - initialPinchRef.current.center.x;
-        const panDy = currentCenter.y - initialPinchRef.current.center.y;
+        const panDx = (currentCenter.x - initialPinchRef.current.center.x) * panSpeed;
+        const panDy = (currentCenter.y - initialPinchRef.current.center.y) * panSpeed;
 
         const rawX = px - origLeft - cx * nextScale + panDx;
         const rawY = py - origTop - cy * nextScale + panDy;
@@ -310,7 +315,7 @@ export function usePanZoom({
         applyTransform(newX, newY, nextScale, false);
       }
     },
-    [applyTransform, clampPosition, maxScale, minScale],
+    [applyTransform, clampPosition, maxScale, minScale, panSpeed],
   );
 
   const onPointerUp = useCallback((e: PointerEvent) => {
@@ -404,7 +409,14 @@ export function usePanZoom({
       const px = e.clientX - rect.left;
       const py = e.clientY - rect.top;
 
-      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      let delta = e.deltaY;
+      if (e.deltaMode === 1) delta *= 16;
+      else if (e.deltaMode === 2) delta *= 80;
+
+      // Dampened exponential zoom: prevents jarring spikes on trackpads and free-spinning wheels
+      const clampedDelta = Math.max(-100, Math.min(100, delta));
+      const factor = Math.exp(-clampedDelta * zoomSpeed);
+
       const currentScale = transformRef.current.scale;
       const nextScale = Math.min(maxScale, Math.max(minScale, currentScale * factor));
       if (Math.abs(nextScale - currentScale) < 0.001) return;
@@ -434,7 +446,7 @@ export function usePanZoom({
 
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [applyTransform, clampPosition, maxScale, minScale]);
+  }, [applyTransform, clampPosition, maxScale, minScale, zoomSpeed]);
 
   // Window resize bounds adjustment
   useEffect(() => {
