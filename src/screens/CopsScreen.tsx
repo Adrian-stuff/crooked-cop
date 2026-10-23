@@ -3,6 +3,7 @@ import type { Action, PublicPlayer, View } from '../../shared/types';
 import { ActionDock, RoundRecap } from '../components/ActionDock';
 import { Board } from '../components/Board';
 import { BoardLegend } from '../components/BoardLegend';
+import { BoardView } from '../components/BoardView';
 import { Envelopes } from '../components/Envelopes';
 import { Log, PlayerList, useCountdown } from '../components/Panels';
 import { StationPopover } from '../components/StationPopover';
@@ -174,18 +175,19 @@ function TurnStage({ view, offset, ids, paused, act, onBack }: {
         <div className="board-wrap">
           <StatusStrip view={view} offset={offset} ids={ids} />
           {paused !== null && <div className="device-banner">Timer paused by the facilitator</div>}
-          <div className="board-scroll">
+          <BoardView showKey={`${view.phase}:${view.round}`} dock={
+            <div className={busy ? 'cops-busy' : ''} aria-busy={busy}>
+              <ActionDock view={view} mode={mode} path={path} setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={send} />
+            </div>
+          }>
             <div className="board-stage">
               <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails} showNames={showNames}
                 focus={focus} onFocus={setFocus} selected={picked} swept={swept} lastSeen={lastSeen}
                 onPick={(id) => setPicked(mode || id === picked ? null : id)} />
               {picked && !mode && <StationPopover view={view} station={picked} ids={ids} act={send} onClose={() => setPicked(null)} />}
             </div>
-          </div>
+          </BoardView>
           <BoardLegend view={view} showNames={showNames} setShowNames={setShowNames} showTrails={showTrails} setShowTrails={setShowTrails} />
-        </div>
-        <div className={`cops-dock ${busy ? 'cops-busy' : ''}`} aria-busy={busy}>
-          <ActionDock view={view} mode={mode} path={path} setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={send} />
         </div>
         <div className="below-board">
           <PlayerList view={{ ...view, players: view.players.filter((p) => p.role !== 'spectator') }} ids={ids} focus={focus} setFocus={setFocus} />

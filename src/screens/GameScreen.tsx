@@ -3,6 +3,7 @@ import type { View } from '../../shared/types';
 import { ActionDock } from '../components/ActionDock';
 import { Board } from '../components/Board';
 import { BoardLegend } from '../components/BoardLegend';
+import { BoardView } from '../components/BoardView';
 import { Chat } from '../components/Chat';
 import { Envelopes } from '../components/Envelopes';
 import { Log, PhaseBanner, PlayerList, RevealCard, RoleReveal, TopBar } from '../components/Panels';
@@ -75,7 +76,9 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
         <div className="board-col">
           <div className="board-wrap">
             <StatusStrip view={view} offset={game.clockOffset} ids={ids} />
-            <div className="board-scroll">
+            <BoardView showKey={`${view.phase}:${view.round}`} dock={
+              <ActionDock key={view.phase} view={view} mode={mode} path={path} setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={game.act} />
+            }>
               <div className="board-stage">
                 <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails}
                   showNames={showNames} focus={focus} onFocus={setFocus} selected={picked} swept={swept} lastSeen={lastSeen} chat={recentChat}
@@ -94,10 +97,9 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
                   <StationPopover view={view} station={picked} ids={ids} act={game.act} onClose={() => setPicked(null)} />
                 )}
               </div>
-            </div>
+            </BoardView>
             <BoardLegend view={view} showNames={showNames} setShowNames={setShowNames} showTrails={showTrails} setShowTrails={setShowTrails} />
           </div>
-          <ActionDock key={view.phase} view={view} mode={mode} path={path} setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={game.act} />
           <div className="below-board">
             <PlayerList view={view} ids={ids} focus={focus} setFocus={setFocus} />
             <Log view={view} />

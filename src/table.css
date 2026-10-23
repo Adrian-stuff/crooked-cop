@@ -28,9 +28,12 @@
 .recorder-who.selected { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); background: #2a2516; }
 .recorder-who:disabled { opacity: 0.45; cursor: default; }
 
-/* The recording bar and the dock stick to the bottom together. */
-.table-dock { position: sticky; bottom: 0; z-index: 5; display: flex; flex-direction: column; gap: 8px; }
-.table-dock > .dock { position: static; } /* its hint floats above the recorder too */
+/* The recording bar and the dock float over the map together. */
+.table-dock { position: relative; display: flex; flex-direction: column; gap: 8px; }
+/* Its hint floats above the recorder too. A backdrop blur would anchor the hint to the dock itself. */
+.dock-float .table-dock > .dock { position: static; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.dock-float .table-dock > .dock:not(.accusing):not(.deciding) { background: #161a22f2; }
+.dock-float .recorder { background: #0f1116d6; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 
 .vote-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; flex: 1 1 320px; }
 .vote-rows li { display: flex; align-items: center; gap: 8px; }
@@ -136,7 +139,6 @@
 .cops-clock.urgent { color: #ff6b6b; }
 .cops-clock.paused { color: var(--muted); }
 .cops-recap { justify-content: center; }
-.cops-dock { position: sticky; bottom: 0; z-index: 5; }
 .cops-whoami { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border-color: #2c5a85; }
 .cops-whoami-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .cops-whoami-text strong { font-family: var(--display); font-weight: 400; font-size: 22px; color: var(--cream); line-height: 1.1; }

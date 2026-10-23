@@ -4,6 +4,7 @@ import { STATIONS } from '../../shared/map';
 import type { PublicPlayer, View } from '../../shared/types';
 import { ActionDock, Card, Dock, RoundRecap, VoteTally } from '../components/ActionDock';
 import { Board, type Mark } from '../components/Board';
+import { BoardView } from '../components/BoardView';
 import { Envelopes } from '../components/Envelopes';
 import { Log, PhaseBanner, PlayerList, RevealCard, useCountdown } from '../components/Panels';
 import { StationPopover } from '../components/StationPopover';
@@ -357,7 +358,21 @@ export function TableScreen({ table, view, link }: { table: TableGame; view: Vie
           <TimerBar table={table} view={view} onShow={() => setShowTimer(true)} />
           <div className="board-wrap">
             <StatusStrip view={view} offset={0} ids={ids} />
-            <div className="board-scroll">
+            <BoardView showKey={`${view.phase}:${view.round}:${actor}:${editArtifacts}`} dock={editArtifacts ? (
+              <Dock title="Placing Artifacts" hint="Tap a station to add or remove an Artifact"
+                sub={`${artifactsLeft} placed, so a Heister escapes with ${Math.ceil(artifactsLeft / 2)}.`}>
+                <button className="btn primary" onClick={() => setEditArtifacts(false)}>Done</button>
+              </Dock>
+            ) : (
+              // The recorder rides with the dock, so whose move it is stays in sight.
+              <div className="table-dock">
+                <Recorder view={view} actor={actor} ids={ids} onPick={setChosen} />
+                {view.phase === 'info'
+                  ? <InfoRecorder table={table} view={view} ids={ids} />
+                  : <ActionDock key={`${view.phase}:${actor}`} view={actorView ?? view} mode={mode} path={path}
+                    setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={act} facilitator={!!actorView} />}
+              </div>
+            )}>
               <div className="board-stage">
                 <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails} showNames
                   focus={focus} onFocus={setFocus} selected={picked} swept={swept}
@@ -366,7 +381,7 @@ export function TableScreen({ table, view, link }: { table: TableGame; view: Vie
                   <StationPopover view={actorView ?? view} station={picked} ids={ids} act={act} onClose={() => setPicked(null)} facilitator />
                 )}
               </div>
-            </div>
+            </BoardView>
             <div className="legend">
               <span><img src="/assets/artifact.png" alt="" width={16} height={16} /> {artifactsLeft} Artifact{artifactsLeft === 1 ? '' : 's'} on the board</span>
               {view.phase === 'setup' && (
@@ -382,21 +397,6 @@ export function TableScreen({ table, view, link }: { table: TableGame; view: Vie
               )}
             </div>
           </div>
-          {editArtifacts ? (
-            <Dock title="Placing Artifacts" hint="Tap a station to add or remove an Artifact"
-              sub={`${artifactsLeft} placed, so a Heister escapes with ${Math.ceil(artifactsLeft / 2)}.`}>
-              <button className="btn primary" onClick={() => setEditArtifacts(false)}>Done</button>
-            </Dock>
-          ) : (
-            // The recorder rides with the dock, so whose move it is stays in sight while scrolling.
-            <div className="table-dock">
-              <Recorder view={view} actor={actor} ids={ids} onPick={setChosen} />
-              {view.phase === 'info'
-                ? <InfoRecorder table={table} view={view} ids={ids} />
-                : <ActionDock key={`${view.phase}:${actor}`} view={actorView ?? view} mode={mode} path={path}
-                  setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={act} facilitator={!!actorView} />}
-            </div>
-          )}
           <div className="below-board">
             <PlayerList view={seatedView} ids={ids} focus={focus} setFocus={setFocus} />
             <Log view={view} />

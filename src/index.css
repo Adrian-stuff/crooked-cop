@@ -706,3 +706,34 @@ input, select {
 .log-expose .log-glyph { color: #7fdc98; }
 .log-announce .log-glyph, .log-win .log-glyph { color: var(--gold); }
 .log li strong { font-weight: 700; }
+
+/* ---------- Dock over the map ---------- */
+/* The dock floats over the bottom of the map like a game HUD, and stays on screen over a map
+   taller than the window. The ▾ button tucks it into a pill to reach the stations under it. */
+.board-view { display: grid; grid-template-columns: minmax(0, 1fr); }
+.board-view > * { grid-area: 1 / 1; }
+.dock-float { align-self: end; position: sticky; bottom: 0; z-index: 5; padding: 0 12px 12px; pointer-events: none; }
+.dock-float > * { pointer-events: auto; }
+.dock-float.tucked { justify-self: center; }
+.dock-float-body { position: relative; }
+.dock-toggle {
+  position: absolute; z-index: 2; top: -14px; right: 22px; width: 28px; height: 24px; padding: 0; cursor: pointer;
+  font: inherit; font-size: 13px; line-height: 1; color: var(--muted); background: var(--panel-2); border: 1px solid #ffffff22; border-radius: 8px;
+}
+.dock-toggle:hover { color: var(--text); border-color: var(--slate); }
+.dock-pill {
+  padding: 8px 16px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; color: var(--gold);
+  background: #161a22e6; border: 1px solid var(--gold); border-radius: 999px; box-shadow: 0 10px 30px #000b;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); animation: tag-in 0.2s ease-out;
+}
+.dock-float .dock {
+  position: relative; background: #161a22d6; border-color: #ffffff22;
+  box-shadow: 0 14px 40px #000b; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}
+.dock-float .dock.deciding { background: #231d10e6; border-color: var(--gold); }
+.dock-float .dock.accusing { background: #2a1719e6; border-color: var(--red); }
+.dock-float .dock.verdict.heisters { border-color: var(--red); }
+.dock-float .dock.verdict.police { border-color: #4f7fc0; }
+@media (max-width: 700px) {
+  .dock-float { padding: 0 6px 6px; }
+}
