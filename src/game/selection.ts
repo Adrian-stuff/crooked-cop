@@ -19,7 +19,13 @@ export function candidates(view: View, mode: Mode, path: string[]): string[] {
   const me = view.players.find((p) => p.id === view.me);
   const here = me?.station;
   if (mode === 'start') {
-    return STATIONS.filter((s) => !(view.myRole === 'heister' && view.exits.includes(s.id))).map((s) => s.id);
+    const isHeister = view.myRole === 'heister' || me?.role === 'heister';
+    const artifactIds = Object.keys(view.artifacts ?? {});
+    return STATIONS.filter((s) => {
+      if (isHeister && view.exits.includes(s.id)) return false;
+      if (isHeister && artifactIds.some((art) => distance(s.id, art) < 3)) return false;
+      return true;
+    }).map((s) => s.id);
   }
   if (!here) return [];
   const last = path.at(-1) ?? here;

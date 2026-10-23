@@ -1,8 +1,9 @@
-import { escapeTarget, heisterCountFor, MAX_PLAYERS, MIN_PLAYERS } from '../../shared/engine';
+import { heisterCountFor, MAX_PLAYERS, MIN_PLAYERS } from '../../shared/engine';
 import { exitsFor, stationLabel } from '../../shared/map';
 import type { Settings, View } from '../../shared/types';
 import { Chat } from '../components/Chat';
 import { TopBar } from '../components/Panels';
+import { RulesSettings } from '../components/RulesSettings';
 import { TokenIcon } from '../components/Token';
 import { SPECTATOR_IDENTITY, seatIdentities, tokenText } from '../game/identity';
 import type { Game } from '../net/useGame';
@@ -16,15 +17,6 @@ export function Lobby({ game, view }: { game: Game; view: View }) {
   const canStart = n >= MIN_PLAYERS && n <= MAX_PLAYERS;
   const link = `${location.origin}${location.pathname}?room=${view.code}`;
   const set = (s: Partial<Settings>) => game.act({ type: 'settings', settings: s });
-
-  const num = (key: keyof Settings, label: string, min: number, max: number, suffix = '') => (
-    <label className="field inline">
-      <span>{label}</span>
-      <input type="number" min={min} max={max} value={view.settings[key] as number} disabled={!me.isHost}
-        onChange={(e) => set({ [key]: Number(e.target.value) })} />
-      {suffix && <span className="muted">{suffix}</span>}
-    </label>
-  );
 
   return (
     <div className="app lobby-screen">
@@ -67,27 +59,12 @@ export function Lobby({ game, view }: { game: Game; view: View }) {
         </section>
 
         <section className="panel settings">
-          <h3>Rules {me.isHost ? '' : <span className="muted">(host sets these)</span>}</h3>
-          {num('maxRounds', 'Rounds', 1, 50)}
-          {num('heisterSeconds', 'Heister Phase', 10, 600, 'sec')}
-          {num('policeSeconds', 'Each officer’s turn', 10, 600, 'sec')}
-          {num('infoSeconds', 'Information Phase', 10, 600, 'sec')}
-          {num('setupSeconds', 'Setup', 10, 600, 'sec')}
-          {num('artifactCount', 'Artifacts hidden', 1, 30)}
-          <p className="hint">A Heister escapes with {escapeTarget(view.settings)} (half of the Artifacts).</p>
-          {num('searchRange', 'Search range', 0, 3, 'stops')}
-          <label className="field inline">
-            <span>Heisters with 6–7 players</span>
-            <select value={String(view.settings.heisterCount)} disabled={!me.isHost}
-              onChange={(e) => set({ heisterCount: e.target.value === 'auto' ? 'auto' : (Number(e.target.value) as 1 | 2) })}>
-              <option value="auto">2 (default)</option>
-              <option value="1">1</option>
-            </select>
-          </label>
-          <label className="check">
-            <input type="checkbox" checked={view.settings.allowDMs} disabled={!me.isHost} onChange={(e) => set({ allowDMs: e.target.checked })} />
-            Allow direct messages
-          </label>
+          <RulesSettings
+            settings={view.settings}
+            onChange={set}
+            isHost={me.isHost}
+            showDMs={true}
+          />
         </section>
 
         <Chat view={view} messages={game.chat} say={game.say} />

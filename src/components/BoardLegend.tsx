@@ -10,9 +10,11 @@ interface Props {
   showTrails: boolean;
   setShowTrails: (on: boolean) => void;
   children?: ReactNode; // extra controls at the end of the row
+  fullscreen?: boolean;
+  onFullscreen?: () => void;
 }
 
-export function BoardLegend({ view, showNames, setShowNames, showTrails, setShowTrails, children }: Props) {
+export function BoardLegend({ view, showNames, setShowNames, showTrails, setShowTrails, children, fullscreen, onFullscreen }: Props) {
   return (
     <div className="legend">
       <span><i className="lg station" /> Station</span>
@@ -29,6 +31,16 @@ export function BoardLegend({ view, showNames, setShowNames, showTrails, setShow
         <label className="check small">
           <input type="checkbox" checked={showTrails} onChange={(e) => setShowTrails(e.target.checked)} /> Heister trails
         </label>
+      )}
+      {onFullscreen && (
+        <button
+          type="button"
+          className={`btn small legend-fullscreen ${fullscreen ? 'selected' : ''}`}
+          onClick={onFullscreen}
+          title={fullscreen ? 'Exit fullscreen map (Esc)' : 'View map in fullscreen'}
+        >
+          {fullscreen ? '🗗 Exit Fullscreen' : '⛶ Fullscreen'}
+        </button>
       )}
       {children}
     </div>

@@ -506,22 +506,26 @@ input, select {
 .board-stage { position: relative; min-width: 760px; }
 .board-stage .board { min-width: 0; }
 .dock {
-  position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: 0 -10px 30px #0008; animation: rise-in 0.35s cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+  position: relative; z-index: 5; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 12px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 4px 20px #0007; animation: rise-in 0.35s cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+  transition: border-color 0.2s ease, background 0.2s ease;
 }
-.dock.verdict.heisters { border-color: var(--red); }
-.dock.verdict.police { border-color: #4f7fc0; }
+.dock.deciding { background: #231d10; border-color: var(--gold); }
+.dock.scanned { border-color: #7a6230; }
 .dock.accusing { border-color: var(--red); background: #2a1719; }
+.dock.verdict.heisters { border-color: var(--red); background: #261517; }
+.dock.verdict.police { border-color: #4f7fc0; background: #131c28; }
 .dock-text { flex: 1 1 220px; min-width: 0; }
 .dock-text h2 { font-size: 19px; margin: 0; color: var(--cream); }
 .dock-text p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
 .dock-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dock-sep { width: 1px; align-self: stretch; background: var(--line); }
 .dock-hint {
-  position: absolute; left: 50%; bottom: 100%; transform: translate(-50%, -8px); white-space: nowrap; max-width: calc(100% - 16px);
-  overflow: hidden; text-overflow: ellipsis; font-size: 12px; padding: 5px 12px; border-radius: 999px;
-  background: #0b0d11ee; border: 1px solid var(--gold); color: var(--gold); animation: tag-in 0.25s ease-out; pointer-events: none;
+  position: absolute; left: 50%; top: -14px; transform: translateX(-50%); white-space: nowrap; max-width: calc(100% - 16px);
+  overflow: hidden; text-overflow: ellipsis; font-size: 12px; padding: 5px 14px; border-radius: 999px;
+  background: #11141bee; border: 1px solid var(--gold); color: var(--gold); box-shadow: 0 4px 16px #000a;
+  animation: tag-in 0.25s ease-out; pointer-events: none; z-index: 6;
 }
 .dock-card {
   display: inline-flex; align-items: center; gap: 8px; min-width: 96px; padding: 7px 12px; text-align: left; cursor: pointer;
@@ -722,36 +726,212 @@ input, select {
 .log-announce .log-glyph, .log-win .log-glyph { color: var(--gold); }
 .log li strong { font-weight: 700; }
 
-/* ---------- Dock over the map ---------- */
-/* The dock floats over the bottom of the map like a game HUD, and stays on screen over a map
-   taller than the window. The ▾ button tucks it into a pill to reach the stations under it. */
-.board-view { display: grid; grid-template-columns: minmax(0, 1fr); }
-.board-view > * { grid-area: 1 / 1; }
-.dock-float { align-self: end; position: sticky; bottom: 0; z-index: 5; padding: 0 12px 12px; pointer-events: none; }
-.dock-float > * { pointer-events: auto; }
-.dock-float.tucked { justify-self: center; }
-.dock-float-body { position: relative; }
-.dock-toggle {
-  position: absolute; z-index: 2; top: -14px; right: 22px; width: 28px; height: 24px; padding: 0; cursor: pointer;
-  font: inherit; font-size: 13px; line-height: 1; color: var(--muted); background: var(--panel-2); border: 1px solid #ffffff22; border-radius: 8px;
+/* ---------- Map Fullscreen ---------- */
+.board-wrap.is-fullscreen {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 1000 !important;
+  width: 100vw !important;
+  width: 100dvw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  border-radius: 0 !important;
+  border: none !important;
+  margin: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: var(--board) !important;
+  box-shadow: none !important;
+  animation: fade-in 0.2s ease-out;
 }
-.dock-toggle:hover { color: var(--text); border-color: var(--slate); }
-.dock-pill {
-  padding: 8px 16px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; color: var(--gold);
-  background: #161a22e6; border: 1px solid var(--gold); border-radius: 999px; box-shadow: 0 10px 30px #000b;
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); animation: tag-in 0.2s ease-out;
+.board-wrap.is-fullscreen .status-strip {
+  flex: none;
+  background: #0f1218ee;
+  border-bottom: 1px solid var(--line);
 }
-.dock-float .dock {
-  position: relative; background: #161a22d6; border-color: #ffffff22;
-  box-shadow: 0 14px 40px #000b; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+.board-wrap.is-fullscreen .board-scroll {
+  flex: 1 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  container-type: size;
 }
-.dock-float .dock.deciding { background: #231d10e6; border-color: var(--gold); }
-.dock-float .dock.scanned { border-color: #7a6230; }
-.dock-float .dock.accusing { background: #2a1719e6; border-color: var(--red); }
-.dock-float .dock.verdict.heisters { border-color: var(--red); }
-.dock-float .dock.verdict.police { border-color: #4f7fc0; }
-@media (max-width: 700px) {
-  .dock-float { padding: 0 6px 6px; }
+.board-wrap.is-fullscreen .board-stage {
+  min-width: 0;
+  flex: none;
+  width: min(100cqw, 100cqh * 2020 / 1080);
+}
+.board-wrap.is-fullscreen .legend {
+  flex: none;
+  background: #0f1218ee;
+  border-top: 1px solid var(--line);
+}
+.board-fs-btn {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: #11141be6;
+  border: 1px solid #ffffff26;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px #0008;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: all 0.15s ease;
+}
+.board-fs-btn:hover {
+  color: var(--cream);
+  border-color: var(--gold);
+  background: #191e28f0;
+  transform: translateY(-1px);
+}
+.board-fs-btn.is-fs {
+  color: var(--gold);
+  border-color: var(--gold);
+  background: #231e13ee;
+  box-shadow: 0 0 16px #c49a4544;
+}
+.legend-fullscreen {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.legend-fullscreen.selected {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: #2a2516;
+}
+
+/* ---------- Map Pan & Zoom ---------- */
+.board-viewport {
+  position: relative;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+}
+.board-viewport.dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+.board-viewport.dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+.board-pan-zoom {
+  flex: none;
+  min-width: 0;
+  position: relative;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.board-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.board-zoom-hud {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+.board-zoom-hud > * {
+  pointer-events: auto;
+}
+.board-zoom-hud .board-fs-btn {
+  position: static;
+}
+.zoom-btn-group {
+  display: flex;
+  flex-direction: column;
+  background: #11141be6;
+  border: 1px solid #ffffff26;
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px #0008;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.zoom-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #ffffff15;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.zoom-btn:last-child {
+  border-bottom: none;
+}
+.zoom-btn:hover:not(:disabled) {
+  color: var(--cream);
+  background: #ffffff18;
+}
+.zoom-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.zoom-btn.zoom-level-btn {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  height: 22px;
+}
+.zoom-btn.zoom-level-btn:hover:not(:disabled) {
+  color: var(--gold);
+}
+.zoom-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gold);
+  background: #11141be6;
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  box-shadow: 0 4px 16px #0008;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: pointer;
+  animation: tag-in 0.2s ease-out;
+  transition: all 0.15s ease;
+}
+.zoom-reset-btn:hover {
+  background: #231e13ee;
+  transform: translateY(-1px);
+  box-shadow: 0 0 16px #c49a4544;
 }
 
 /* ---------- Main game fits one screen ---------- */
@@ -764,20 +944,20 @@ input, select {
 @media (min-width: 1101px) and (min-height: 620px) {
   .game-fold { height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
   .game-fold > .game { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
-  .game-fold .board-col { min-height: 0; }
+  .game-fold .board-col { min-height: 0; display: flex; flex-direction: column; gap: 10px; }
   .game-fold .board-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-  .game-fold .board-view { flex: 1; min-height: 0; container-type: size; grid-template-rows: minmax(0, 1fr); }
-  .game-fold .board-scroll { overflow: hidden; display: flex; justify-content: center; align-items: flex-start; }
+  .game-fold .board-scroll { flex: 1; min-height: 0; overflow: hidden; display: flex; justify-content: center; align-items: center; container-type: size; }
   /* As big as fits both ways, keeping the map's shape (1920 × 1080 plus its 50px side margins). */
   .game-fold .board-stage { min-width: 0; flex: none; width: min(100cqw, 100cqh * 2020 / 1080); }
+  .game-fold .dock { flex: none; }
   .game-fold .side-col { position: static; max-height: none; min-height: 0; }
   .game-fold .side-col .envelopes { max-height: 45%; flex: none; }
   .game-fold .side-col .chat { flex: 1; min-height: 0; }
 }
 /* Short windows: the plain dock drops its explanation line (the cards and the hint already say it)
-   so it covers less of the map. Votes, warnings and the verdict keep theirs. */
+   so it leaves maximum height for the map. Votes, warnings and the verdict keep theirs. */
 @media (min-width: 1101px) and (min-height: 620px) and (max-height: 800px) {
-  .game-fold .dock-float .dock:not(.accusing):not(.deciding):not(.verdict) .dock-text p { display: none; }
-  .game-fold .dock-float .dock:not(.accusing):not(.deciding):not(.verdict) .dock-text { flex: 0 1 auto; }
-  .game-fold .dock-float .dock-card { min-width: 0; padding: 6px 10px; }
+  .game-fold .dock:not(.accusing):not(.deciding):not(.verdict) .dock-text p { display: none; }
+  .game-fold .dock:not(.accusing):not(.deciding):not(.verdict) .dock-text { flex: 0 1 auto; }
+  .game-fold .dock-card { min-width: 0; padding: 6px 10px; }
 }

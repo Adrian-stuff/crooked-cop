@@ -1,14 +1,26 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { BoardPanZoom } from './BoardPanZoom';
 
-// The map with the action dock floating over its bottom edge, like a game HUD. It stays on
-// screen over a map taller than the window. Tuck it away to reach the stations under it;
-// it comes back by itself whenever `showKey` changes (a new phase, round or player).
-export function BoardView({ children, dock, showKey }: { children: ReactNode; dock: ReactNode; showKey?: string }) {
+interface Props {
+  children: ReactNode;
+  dock: ReactNode;
+  showKey?: string;
+  overlay?: ReactNode;
+  controls?: ReactNode;
+}
+
+// The map with zoom and drag controls, plus the action dock floating over its bottom edge
+// like a game HUD.
+export function BoardView({ children, dock, showKey, overlay, controls }: Props) {
   const [tucked, setTucked] = useState(false);
   useEffect(() => setTucked(false), [showKey]);
+
   return (
     <div className="board-view">
-      <div className="board-scroll">{children}</div>
+      <BoardPanZoom overlay={overlay} controls={controls}>
+        {children}
+      </BoardPanZoom>
+
       <div className={`dock-float ${tucked ? 'tucked' : ''}`}>
         {tucked ? (
           <button className="dock-pill" onClick={() => setTucked(false)}>▴ Show actions</button>

@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { escapeTarget, heisterCountFor, MAX_PLAYERS, MIN_PLAYERS } from '../../shared/engine';
+import { heisterCountFor, MAX_PLAYERS, MIN_PLAYERS } from '../../shared/engine';
 import { exitsFor, stationLabel } from '../../shared/map';
 import type { Settings, View } from '../../shared/types';
+import { RulesSettings } from '../components/RulesSettings';
 import { TokenIcon } from '../components/Token';
 import { SPECTATOR_IDENTITY, seatIdentities, tokenText } from '../game/identity';
 import { checkCards, type DealtRole, type TableGame } from '../net/useTableGame';
@@ -29,15 +30,6 @@ export function TableLobby({ table, view, link }: { table: TableGame; view: View
     table.addPlayer(name);
     setName('');
   };
-
-  const num = (key: keyof Settings, label: string, min: number, max: number, suffix = '') => (
-    <label className="field inline">
-      <span>{label}</span>
-      <input type="number" min={min} max={max} value={view.settings[key] as number}
-        onChange={(e) => set({ [key]: Number(e.target.value) })} />
-      {suffix && <span className="muted">{suffix}</span>}
-    </label>
-  );
 
   return (
     <div className="app lobby-screen">
@@ -99,24 +91,28 @@ export function TableLobby({ table, view, link }: { table: TableGame; view: View
         </section>
 
         <section className="panel settings">
-          <h3>Rules</h3>
-          {num('maxRounds', 'Rounds', 1, 50)}
-          {num('heisterSeconds', 'Heister Phase', 10, 600, 'sec')}
-          {num('policeSeconds', 'Each officer’s turn', 10, 600, 'sec')}
-          {num('infoSeconds', 'Information Phase', 10, 600, 'sec')}
-          {num('setupSeconds', 'Setup', 10, 600, 'sec')}
-          {num('artifactCount', 'Artifacts hidden', 1, 30)}
-          <p className="hint">A Heister escapes with {escapeTarget(view.settings)} (half of the Artifacts). You can move the Artifacts to match the board during setup.</p>
-          {num('searchRange', 'Search range', 0, 3, 'stops')}
-          <label className="field inline">
-            <span>Heisters with 6–7 players</span>
-            <select value={String(view.settings.heisterCount)} disabled={!save.dealRandom}
-              onChange={(e) => set({ heisterCount: e.target.value === 'auto' ? 'auto' : (Number(e.target.value) as 1 | 2) })}>
-              <option value="auto">2 (default)</option>
-              <option value="1">1</option>
-            </select>
-          </label>
-          <p className="hint">Timers run on this device. You can pause or add time whenever the table needs it.</p>
+          <RulesSettings
+            settings={view.settings}
+            onChange={set}
+            isHost={true}
+            showDMs={false}
+            heisterCountDisabled={!save.dealRandom}
+            heisterCountNote={
+              !save.dealRandom
+                ? 'Role counts are determined by physical role cards selected above.'
+                : undefined
+            }
+            extraFooter={
+              <div className="rules-facilitator-notes">
+                <p className="hint">
+                  <strong>Facilitator Note:</strong> Timers run on this device. You can pause or add time whenever the table needs it.
+                </p>
+                <p className="hint">
+                  Artifacts can be adjusted on the digital map to match the physical board during setup.
+                </p>
+              </div>
+            }
+          />
         </section>
 
         <DevicesPanel table={table} link={link} />

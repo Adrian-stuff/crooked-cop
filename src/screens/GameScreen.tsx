@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { View } from '../../shared/types';
 import { stationLabel } from '../../shared/map';
 import { ActionDock } from '../components/ActionDock';
 import { Board } from '../components/Board';
 import { BoardLegend } from '../components/BoardLegend';
-import { BoardView } from '../components/BoardView';
+import { BoardPanZoom } from '../components/BoardPanZoom';
 import { Chat } from '../components/Chat';
 import { Envelopes } from '../components/Envelopes';
 import { ArrestCard, Log, PhaseBanner, PlayerList, RevealCard, RoleReveal, TopBar } from '../components/Panels';
@@ -13,11 +13,14 @@ import { StationPopover } from '../components/StationPopover';
 import { seatIdentities } from '../game/identity';
 import { channelKind, channelLabel, useRecentChat } from '../game/recentChat';
 import { useEnvelopeHighlight } from '../game/envelopeHighlight';
+import { useFullscreen } from '../game/useFullscreen';
 import { unlockSound, useTurnAlert } from '../game/turnAlert';
 import { marksFor, type Mode } from '../game/selection';
 import type { Game } from '../net/useGame';
 
 export function GameScreen({ game, view }: { game: Game; view: View }) {
+  const boardWrapRef = useRef<HTMLDivElement>(null);
+  const { fullscreen, toggle: toggleFullscreen } = useFullscreen(boardWrapRef);
   const [mode, setMode] = useState<Mode>(null);
   const [path, setPath] = useState<string[]>([]);
   const [showRole, setShowRole] = useState(view.phase === 'setup');
@@ -90,17 +93,36 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
         <TopBar view={view} onLeave={game.leave} sound={sound} onSound={toggleSound} />
         <main className="game">
           <div className="board-col">
-            <div className="board-wrap">
+            <div ref={boardWrapRef} className={`board-wrap ${fullscreen ? 'is-fullscreen' : ''}`}>
               <StatusStrip view={view} offset={game.clockOffset} ids={ids} />
-              <BoardView showKey={`${view.phase}:${view.round}`} dock={
-                <ActionDock key={view.phase} view={view} mode={mode} path={path} setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={game.act} />
-              }>
-                <div className="board-stage">
-                  <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails}
-                    showNames={showNames} focus={focus} onFocus={setFocus} selected={picked} swept={swept} lastSeen={lastSeen} chat={recentChat}
-                    pings={pings}
-                    onPick={(id) => setPicked(mode || id === picked ? null : id)} />
-                  {ticker.length > 0 && (
+              <BoardPanZoom
+                controls={
+                  <button
+                    type="button"
+                    className={`board-fs-btn ${fullscreen ? 'is-fs' : ''}`}
+                    onClick={toggleFullscreen}
+                    title={fullscreen ? 'Exit fullscreen map (Esc)' : 'Expand map fullscreen'}
+                    aria-label={fullscreen ? 'Exit fullscreen' : 'Expand map fullscreen'}
+                  >
+                    {fullscreen ? (
+                      <>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+                        </svg>
+                        <span>Exit</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                        </svg>
+                        <span>Fullscreen</span>
+                      </>
+                    )}
+                  </button>
+                }
+                overlay={
+                  ticker.length > 0 && (
                     <div className="chat-ticker" aria-live="polite">
                       {ticker.map((m) => (
                         <div key={m.id} className={`tick ${channelKind(m.channel)}`}>
@@ -109,17 +131,26 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
                         </div>
                       ))}
                     </div>
-                  )}
+                  )
+                }
+              >
+                <div className="board-stage">
+                  <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails}
+                    showNames={showNames} focus={focus} onFocus={setFocus} selected={picked} swept={swept} lastSeen={lastSeen} chat={recentChat}
+                    pings={pings}
+                    onPick={(id) => setPicked(mode || id === picked ? null : id)} />
                   {picked && !mode && (
                     <StationPopover view={view} station={picked} ids={ids} act={game.act} onClose={() => setPicked(null)}
                       onPing={(id) => game.say('police', `📍 Pointing at ${stationLabel(id)} [ping:${id}]`)} />
                   )}
                 </div>
-              </BoardView>
-              <BoardLegend view={view} showNames={showNames} setShowNames={setShowNames} showTrails={showTrails} setShowTrails={setShowTrails}>
+              </BoardPanZoom>
+              <BoardLegend view={view} showNames={showNames} setShowNames={setShowNames} showTrails={showTrails} setShowTrails={setShowTrails}
+                fullscreen={fullscreen} onFullscreen={toggleFullscreen}>
                 <a className="legend-more" href="#case-file">Players &amp; log ↓</a>
               </BoardLegend>
             </div>
+            <ActionDock key={view.phase} view={view} mode={mode} path={path} setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={game.act} />
           </div>
           <aside className="side-col">
             <Envelopes view={view} ids={ids} highlight={highlight} onHighlight={onHighlight} />

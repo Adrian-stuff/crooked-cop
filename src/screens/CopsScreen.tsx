@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Action, PublicPlayer, View } from '../../shared/types';
 import { ActionDock, RoundRecap } from '../components/ActionDock';
 import { Board } from '../components/Board';
 import { BoardLegend } from '../components/BoardLegend';
-import { BoardView } from '../components/BoardView';
+import { BoardPanZoom } from '../components/BoardPanZoom';
 import { Envelopes } from '../components/Envelopes';
 import { Log, PlayerList, useCountdown } from '../components/Panels';
 import { StationPopover } from '../components/StationPopover';
 import { StatusStrip } from '../components/StatusStrip';
 import { TokenIcon } from '../components/Token';
 import { useEnvelopeHighlight } from '../game/envelopeHighlight';
+import { useFullscreen } from '../game/useFullscreen';
 import { SPECTATOR_IDENTITY, seatIdentities, tokenText, type Identity } from '../game/identity';
 import { marksFor, type Mode } from '../game/selection';
 import { useTableDevice } from '../net/tableLink';
@@ -149,6 +150,8 @@ function Handoff({ player, ids, base, offset, paused, onStart, onReview }: {
 function TurnStage({ view, offset, ids, paused, act, onBack }: {
   view: View; offset: number; ids: Record<string, Identity>; paused: number | null; act: (a: Action) => Promise<void>; onBack: () => void;
 }) {
+  const boardWrapRef = useRef<HTMLDivElement>(null);
+  const { fullscreen, toggle: toggleFullscreen } = useFullscreen(boardWrapRef);
   const [mode, setMode] = useState<Mode>(null);
   const [path, setPath] = useState<string[]>([]);
   const [picked, setPicked] = useState<string | null>(null);
@@ -179,22 +182,48 @@ function TurnStage({ view, offset, ids, paused, act, onBack }: {
   return (
     <main className="game cops-turn">
       <div className="board-col">
-        <div className="board-wrap">
+        <div ref={boardWrapRef} className={`board-wrap ${fullscreen ? 'is-fullscreen' : ''}`}>
           <StatusStrip view={view} offset={offset} ids={ids} />
           {paused !== null && <div className="device-banner">Timer paused by the facilitator</div>}
-          <BoardView showKey={`${view.phase}:${view.round}`} dock={
-            <div className={busy ? 'cops-busy' : ''} aria-busy={busy}>
-              <ActionDock view={view} mode={mode} path={path} setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={send} />
-            </div>
-          }>
+          <BoardPanZoom
+            controls={
+              <button
+                type="button"
+                className={`board-fs-btn ${fullscreen ? 'is-fs' : ''}`}
+                onClick={toggleFullscreen}
+                title={fullscreen ? 'Exit fullscreen map (Esc)' : 'Expand map fullscreen'}
+                aria-label={fullscreen ? 'Exit fullscreen' : 'Expand map fullscreen'}
+              >
+                {fullscreen ? (
+                  <>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+                    </svg>
+                    <span>Exit</span>
+                  </>
+                ) : (
+                  <>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                    </svg>
+                    <span>Fullscreen</span>
+                  </>
+                )}
+              </button>
+            }
+          >
             <div className="board-stage">
               <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails} showNames={showNames}
                 focus={focus} onFocus={setFocus} selected={picked} swept={swept} lastSeen={lastSeen}
                 onPick={(id) => setPicked(mode || id === picked ? null : id)} />
               {picked && !mode && <StationPopover view={view} station={picked} ids={ids} act={send} onClose={() => setPicked(null)} />}
             </div>
-          </BoardView>
-          <BoardLegend view={view} showNames={showNames} setShowNames={setShowNames} showTrails={showTrails} setShowTrails={setShowTrails} />
+          </BoardPanZoom>
+          <BoardLegend view={view} showNames={showNames} setShowNames={setShowNames} showTrails={showTrails} setShowTrails={setShowTrails}
+            fullscreen={fullscreen} onFullscreen={toggleFullscreen} />
+        </div>
+        <div className={busy ? 'cops-busy' : ''} aria-busy={busy}>
+          <ActionDock view={view} mode={mode} path={path} setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={send} />
         </div>
         <div className="below-board">
           <PlayerList view={{ ...view, players: view.players.filter((p) => p.role !== 'spectator') }} ids={ids} focus={focus} setFocus={setFocus} />

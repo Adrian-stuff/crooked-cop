@@ -183,7 +183,7 @@ export function ActionDock({ view, mode, path, setMode, setPath, act, facilitato
     }
     return (
       <Dock title={facilitator ? `Where does ${me.name} start?` : 'Choose your starting station'} hint={hint}
-        sub={facilitator ? 'Tap their station on the map. It locks in straight away, and Undo takes it back.'
+        sub={facilitator ? (view.myRole === 'heister' ? 'Heisters must start at least 3 stations away from any Artifact and not on an Exit. Tap their station on the map.' : 'Tap their station on the map. It locks in straight away, and Undo takes it back.')
           : view.myRole === 'heister' ? 'Pick secretly. Officer picks stay hidden until setup ends. Gold coins mark the Artifacts.'
           : 'Your team sees your pick; the Heisters only see it when setup ends. Spread out to cover the network.'}>
         <Card label={mode === 'start' ? 'Click a station…' : 'Pick on the map'} kind="primary" selected={mode === 'start'} onClick={() => pick('start')} />

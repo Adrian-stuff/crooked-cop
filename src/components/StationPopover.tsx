@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { LINES, STATION_BY_ID, linesAt, searchArea, stationLabel } from '../../shared/map';
+import { LINES, STATION_BY_ID, distance, linesAt, searchArea, stationLabel } from '../../shared/map';
 import type { Action, View } from '../../shared/types';
 import { stationPercent } from '../game/geometry';
 import { SPECTATOR_IDENTITY, tokenText, type Identity } from '../game/identity';
@@ -129,7 +129,7 @@ export function StationPopover({ view, station, ids, act, onClose, facilitator, 
         </div>
       ) : (
         <>
-          <p className="pop-none">{noneReason(view, facilitator)}</p>
+          <p className="pop-none">{noneReason(view, station, facilitator)}</p>
           {onPing && isOfficer && view.phase !== 'lobby' && view.phase !== 'ended' && (
             <div className="pop-choices">
               <button className="choice ping" onClick={() => { onPing(station); onClose(); }}>
@@ -144,7 +144,7 @@ export function StationPopover({ view, station, ids, act, onClose, facilitator, 
   );
 }
 
-function noneReason(view: View, facilitator?: boolean): string {
+function noneReason(view: View, station: string, facilitator?: boolean): string {
   const me = view.players.find((p) => p.id === view.me);
   if (facilitator && (!me || view.myRole === 'spectator')) return 'Nobody to record a move for right now.';
   if (!me || view.myRole === 'spectator' || me.status !== 'active') return facilitator ? `${me?.name} is out of play.` : 'You are watching this case.';
@@ -152,7 +152,16 @@ function noneReason(view: View, facilitator?: boolean): string {
   const officer = view.myRole === 'police' || view.myRole === 'traitor';
   if (view.phase === 'police' && officer && view.policeTurn !== me.id) return 'Wait for your turn.';
   if (view.phase === 'police' && officer) return 'Out of reach this turn.';
-  if (view.phase === 'setup') return facilitator ? `${me.name} starts here.` : 'You start here.';
+  if (view.phase === 'setup') {
+    const isHeister = view.myRole === 'heister' || me.role === 'heister';
+    if (me.station === station) return facilitator ? `${me.name} starts here.` : 'You start here.';
+    if (isHeister && view.exits.includes(station)) return 'Heisters cannot start on an Exit Station.';
+    const artifactIds = Object.keys(view.artifacts ?? {});
+    if (isHeister && artifactIds.some((art) => distance(station, art) < 3)) {
+      return 'Heisters must start at least 3 stations away from any Artifact.';
+    }
+    return facilitator ? `${me.name} starts here.` : 'You start here.';
+  }
   if (view.phase === 'heister' && view.myRole === 'heister') return 'Out of reach this turn.';
   return 'Nothing to do here this phase.';
 }

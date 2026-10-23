@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { escapeTarget } from '../../shared/engine';
 import { STATIONS } from '../../shared/map';
 import type { PublicPlayer, View } from '../../shared/types';
 import { ActionDock, Card, Dock, RoundRecap, VoteTally } from '../components/ActionDock';
 import { Board, type Mark } from '../components/Board';
-import { BoardView } from '../components/BoardView';
+import { BoardPanZoom } from '../components/BoardPanZoom';
 import { Envelopes } from '../components/Envelopes';
 import { Log, PhaseBanner, PlayerList, RevealCard, useCountdown } from '../components/Panels';
 import { StationPopover } from '../components/StationPopover';
 import { StatusStrip } from '../components/StatusStrip';
 import { TokenIcon } from '../components/Token';
 import { useEnvelopeHighlight } from '../game/envelopeHighlight';
+import { useFullscreen } from '../game/useFullscreen';
 import { SPECTATOR_IDENTITY, seatIdentities, tokenText, type Identity } from '../game/identity';
 import { actsThisPhase, marksFor, type Mode } from '../game/selection';
 import { deviceUrl, useFacilitatorLink, type DeviceKind, type FacilitatorLink } from '../net/tableLink';
@@ -22,11 +23,19 @@ const PHASE_NAME: Record<string, string> = {
   lobby: 'Lobby', setup: 'Setup', heister: 'Heister Phase', police: 'Police Phase', info: 'Information Phase', ended: 'Case closed',
 };
 
-const isOfficer = (role: string) => role === 'police' || role === 'traitor';
+export const isOfficer = (role: string) => role === 'police' || role === 'traitor';
 const clock = (ms: number) => {
   const secs = Math.ceil(ms / 1000);
   return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
 };
+
+export function setupOrder(a: PublicPlayer, b: PublicPlayer): number {
+  const aOfficer = isOfficer(a.role);
+  const bOfficer = isOfficer(b.role);
+  if (aOfficer && !bOfficer) return -1;
+  if (!aOfficer && bOfficer) return 1;
+  return 0;
+}
 
 export function TableApp({ onExit }: { onExit: () => void }) {
   const table = useTableGame();
@@ -132,24 +141,27 @@ function PublicTimer({ table, view, onClose }: { table: TableGame; view: View; o
   );
 }
 
-// Whose move is being recorded. In setup and the Heister Phase the facilitator can pick the order;
-// officers always go in seat order.
-function Recorder({ view, actor, ids, onPick }: { view: View; actor: string | null; ids: Record<string, Identity>; onPick: (id: string) => void }) {
-  const waiting = view.players.filter((p) => actsThisPhase(view.phase, p) && !p.done);
+// Whose move is being recorded. In setup officers are placed first, then heisters.
+// In the Heister Phase the facilitator can pick the order; officers always go in seat order.
+function Recorder({ view, waiting, actor, ids, onPick }: { view: View; waiting: PublicPlayer[]; actor: string | null; ids: Record<string, Identity>; onPick: (id: string) => void }) {
   if (!waiting.length || view.phase === 'info' || view.phase === 'ended') return null;
+  const hasWaitingOfficer = view.phase === 'setup' && waiting.some((p) => isOfficer(p.role));
   const choosable = view.phase === 'setup' || view.phase === 'heister';
   const roleName = (p: PublicPlayer) => (p.role === 'heister' ? `${p.label} Heister` : p.role === 'traitor' ? 'Crooked Cop' : 'Officer');
   return (
     <div className="recorder" role="group" aria-label="Recording for">
       <span className="recorder-label">Recording for</span>
-      {waiting.map((p) => (
-        <button key={p.id} className={`recorder-who ${p.id === actor ? 'selected' : ''}`} aria-pressed={p.id === actor}
-          disabled={!choosable && p.id !== actor} onClick={() => onPick(p.id)}>
-          <TokenIcon role={p.role} identity={ids[p.id] ?? SPECTATOR_IDENTITY} text={tokenText(p)} size={24} />
-          <span>{p.name}</span>
-          <small>{roleName(p)}</small>
-        </button>
-      ))}
+      {waiting.map((p) => {
+        const disabled = (!choosable && p.id !== actor) || (hasWaitingOfficer && p.role === 'heister');
+        return (
+          <button key={p.id} className={`recorder-who ${p.id === actor ? 'selected' : ''}`} aria-pressed={p.id === actor}
+            disabled={disabled} title={hasWaitingOfficer && p.role === 'heister' ? 'Place officers first' : undefined} onClick={() => onPick(p.id)}>
+            <TokenIcon role={p.role} identity={ids[p.id] ?? SPECTATOR_IDENTITY} text={tokenText(p)} size={24} />
+            <span>{p.name}</span>
+            <small>{roleName(p)}</small>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -297,12 +309,22 @@ function Notes({ table }: { table: TableGame }) {
 }
 
 export function TableScreen({ table, view, link }: { table: TableGame; view: View; link: FacilitatorLink }) {
+  const boardWrapRef = useRef<HTMLDivElement>(null);
+  const { fullscreen, toggle: toggleFullscreen } = useFullscreen(boardWrapRef);
   const ids = useMemo(() => seatIdentities(view.players), [view.players]);
-  const waiting = view.players.filter((p) => actsThisPhase(view.phase, p) && !p.done);
+  const waiting = useMemo(() => {
+    const list = view.players.filter((p) => actsThisPhase(view.phase, p) && !p.done);
+    return view.phase === 'setup' ? [...list].sort(setupOrder) : list;
+  }, [view.players, view.phase]);
+  const hasWaitingOfficer = view.phase === 'setup' && waiting.some((p) => isOfficer(p.role));
   const [chosen, setChosen] = useState<string | null>(null);
   const actor = view.phase === 'police' ? view.policeTurn
-    : view.phase === 'setup' || view.phase === 'heister' ? (waiting.find((p) => p.id === chosen) ?? waiting[0])?.id ?? null
-      : null;
+    : view.phase === 'setup' || view.phase === 'heister' ? (
+        view.phase === 'setup' && hasWaitingOfficer
+          ? (waiting.find((p) => p.id === chosen && isOfficer(p.role)) ?? waiting[0])?.id ?? null
+          : (waiting.find((p) => p.id === chosen) ?? waiting[0])?.id ?? null
+      )
+    : null;
   const actorView = actor ? table.viewAs(actor) : null;
   const act = (a: Parameters<TableGame['act']>[0]) => (actor ? table.actAs(actor, a) : table.act(a));
 
@@ -337,6 +359,7 @@ export function TableScreen({ table, view, link }: { table: TableGame; view: Vie
     if (mode === 'start') {
       // One tap places and locks in the player's start, then the next player is up.
       table.actAs(actor, { type: 'chooseStart', station: id }, { type: 'ready' });
+      setChosen(null);
     } else if (mode === 'move' || mode === 'express') {
       if (path.at(-1) === id) setPath(path.slice(0, -1));
       else if (marks[id] === 'candidate') setPath([...path, id]);
@@ -360,23 +383,37 @@ export function TableScreen({ table, view, link }: { table: TableGame; view: Vie
         <main className="game">
           <div className="board-col">
             <TimerBar table={table} view={view} onShow={() => setShowTimer(true)}>
-              {!editArtifacts && <Recorder view={view} actor={actor} ids={ids} onPick={setChosen} />}
+              {!editArtifacts && <Recorder view={view} waiting={waiting} actor={actor} ids={ids} onPick={setChosen} />}
             </TimerBar>
-            <div className="board-wrap">
+            <div ref={boardWrapRef} className={`board-wrap ${fullscreen ? 'is-fullscreen' : ''}`}>
               <StatusStrip view={view} offset={0} ids={ids} />
-              <BoardView showKey={`${view.phase}:${view.round}:${actor}:${editArtifacts}`} dock={editArtifacts ? (
-                <Dock title="Placing Artifacts" hint="Tap a station to add or remove an Artifact"
-                  sub={`${artifactsLeft} placed, so a Heister escapes with ${Math.ceil(artifactsLeft / 2)}.`}>
-                  <button className="btn primary" onClick={() => setEditArtifacts(false)}>Done</button>
-                </Dock>
-              ) : (
-                <div className="table-dock">
-                  {view.phase === 'info'
-                    ? <InfoRecorder table={table} view={view} ids={ids} />
-                    : <ActionDock key={`${view.phase}:${actor}`} view={actorView ?? view} mode={mode} path={path}
-                      setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={act} facilitator={!!actorView} />}
-                </div>
-              )}>
+              <BoardPanZoom
+                controls={
+                  <button
+                    type="button"
+                    className={`board-fs-btn ${fullscreen ? 'is-fs' : ''}`}
+                    onClick={toggleFullscreen}
+                    title={fullscreen ? 'Exit fullscreen map (Esc)' : 'Expand map fullscreen'}
+                    aria-label={fullscreen ? 'Exit fullscreen' : 'Expand map fullscreen'}
+                  >
+                    {fullscreen ? (
+                      <>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+                        </svg>
+                        <span>Exit</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                        </svg>
+                        <span>Fullscreen</span>
+                      </>
+                    )}
+                  </button>
+                }
+              >
                 <div className="board-stage">
                   <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails} showNames
                     focus={focus} onFocus={setFocus} selected={picked} swept={swept}
@@ -385,7 +422,7 @@ export function TableScreen({ table, view, link }: { table: TableGame; view: Vie
                     <StationPopover view={actorView ?? view} station={picked} ids={ids} act={act} onClose={() => setPicked(null)} facilitator />
                   )}
                 </div>
-              </BoardView>
+              </BoardPanZoom>
               <div className="legend">
                 <span><img src="/assets/artifact.png" alt="" width={16} height={16} /> {artifactsLeft} Artifact{artifactsLeft === 1 ? '' : 's'} on the board</span>
                 {view.phase === 'setup' && (
@@ -399,9 +436,30 @@ export function TableScreen({ table, view, link }: { table: TableGame; view: Vie
                     <input type="checkbox" checked={showTrails} onChange={(e) => setShowTrails(e.target.checked)} /> Heister trails
                   </label>
                 )}
+                <button
+                  type="button"
+                  className={`btn small legend-fullscreen ${fullscreen ? 'selected' : ''}`}
+                  onClick={toggleFullscreen}
+                  title={fullscreen ? 'Exit fullscreen map (Esc)' : 'View map in fullscreen'}
+                >
+                  {fullscreen ? '🗗 Exit Fullscreen' : '⛶ Fullscreen'}
+                </button>
                 <a className="legend-more" href="#case-file">Players &amp; log ↓</a>
               </div>
             </div>
+            {editArtifacts ? (
+              <Dock title="Placing Artifacts" hint="Tap a station to add or remove an Artifact"
+                sub={`${artifactsLeft} placed, so a Heister escapes with ${Math.ceil(artifactsLeft / 2)}.`}>
+                <button className="btn primary" onClick={() => setEditArtifacts(false)}>Done</button>
+              </Dock>
+            ) : (
+              <div className="table-dock">
+                {view.phase === 'info'
+                  ? <InfoRecorder table={table} view={view} ids={ids} />
+                  : <ActionDock key={`${view.phase}:${actor}`} view={actorView ?? view} mode={mode} path={path}
+                    setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={act} facilitator={!!actorView} />}
+              </div>
+            )}
           </div>
           <aside className="side-col">
             <Envelopes view={view} ids={ids} highlight={highlight} onHighlight={onHighlight} />
