@@ -45,10 +45,16 @@ function SearchRows({ r }: { r: SearchResult }) {
 }
 
 function ScanRows({ r }: { r: ScanResult }) {
+  const at = r.heistersNow?.length ? names(r.heistersNow) : null;
   return (
     <ul className="env-rows">
       {r.found
-        ? <li className="danger"><i aria-hidden="true">!</i><span><strong>A Heister is on the {lineName(r.line)} line</strong> right now</span></li>
+        ? (
+            <li className="danger">
+              <i aria-hidden="true">!</i>
+              <span><strong>Heister spotted on the {lineName(r.line)} line</strong>{at ? <> at <strong>{at}</strong></> : ''} right now</span>
+            </li>
+          )
         : <li className="clear"><i aria-hidden="true">✓</i><span>No Heister on the {lineName(r.line)} line right now</span></li>}
       <li><i aria-hidden="true">·</i><span>Scanned from {stationLabel(r.from)} across {r.stations.length} stations</span></li>
     </ul>
@@ -78,10 +84,11 @@ function Summary({ e, ids }: { e: Envelope; ids: Props['ids'] }) {
     return <><span className="env-what">{stationLabel(e.search.station)}</span><span className={`env-chip ${o.tone}`}>{o.text}</span></>;
   }
   if (e.scan) {
+    const at = e.scan.heistersNow?.length ? names(e.scan.heistersNow) : null;
     return (
       <>
         <span className="env-what"><i className="line-swatch" style={{ background: LINES.find((l) => l.id === e.scan!.line)?.color }} />{lineName(e.scan.line)} line</span>
-        <span className={`env-chip ${e.scan.found ? 'danger' : 'clear'}`}>{e.scan.found ? 'Heister on line' : 'Line clear'}</span>
+        <span className={`env-chip ${e.scan.found ? 'danger' : 'clear'}`}>{e.scan.found ? (at ? `Heister at ${at}` : 'Heister on line') : 'Line clear'}</span>
       </>
     );
   }

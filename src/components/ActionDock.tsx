@@ -23,7 +23,7 @@ const HINT: Partial<Record<NonNullable<Mode>, string>> = {
   move: 'Pick up to 2 stops on the map',
   express: `Ride up to ${EXPRESS_STOPS} stops. Change lines only at interchanges`,
   search: "Click a blue-ringed station: you'll go there and sweep the area around it",
-  arrest: "Click a red-ringed station. A wrong arrest costs you next round's Police Phase",
+  arrest: "Click a red-ringed station within 2 stops. A wrong arrest costs you next round's Police Phase",
 };
 
 interface CardProps {
@@ -91,7 +91,7 @@ export function RoundRecap({ view }: { view: View }) {
     const at = stationLabel(a.station);
     const text = a.kind === 'search' ? `${who} searched ${at}`
       : a.kind === 'ultimate' ? `${who} scanned the ${lineName(a.line ?? '')} line`
-      : a.kind === 'arrest' ? (a.ok ? `${who} caught a Heister at ${at}` : `${who}'s arrest at ${at} failed`)
+      : a.kind === 'arrest' ? (a.ok ? `🚨 ${who} CAUGHT a Heister at ${at}` : `✗ ${who}'s arrest at ${at} missed`)
         : a.kind === 'move' ? `${who} moved to ${at}` : `${who} passed`;
     const tone = a.kind === 'arrest' ? (a.ok ? 'clear' : 'danger') : a.kind === 'search' ? 'search' : a.kind === 'ultimate' ? 'ultimate' : '';
     return <span key={i} className={`recap-item ${tone}`}>{text}</span>;

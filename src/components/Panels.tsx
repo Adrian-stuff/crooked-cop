@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { stationLabel } from '../../shared/map';
-import type { PublicPlayer, View } from '../../shared/types';
+import type { LogEntry, PublicPlayer, View } from '../../shared/types';
 import { ART } from '../game/art';
 import { SPECTATOR_IDENTITY, seatIdentities, tokenText, type Identity } from '../game/identity';
 import { actsThisPhase } from '../game/selection';
@@ -143,6 +143,41 @@ export function RevealCard({ view }: { view: View }) {
         <h2>{guilty ? `${who} WAS the Crooked Cop` : `${who} is NOT the Crooked Cop`}</h2>
         <p>{guilty ? 'They are removed from the force. The Heisters just lost their inside source.'
           : "The vote passed against an honest officer. They can't arrest next round, and the real Crooked Cop is still out there."}</p>
+      </div>
+    </div>
+  );
+}
+
+// Alert card shown to everyone when an arrest attempt succeeds or fails.
+export function ArrestCard({ view }: { view: View }) {
+  const lastArrest = [...view.log].reverse().find((e) => e.kind === 'arrest' || e.kind === 'fail');
+  const seen = useRef(lastArrest?.id ?? null);
+  const [shown, setShown] = useState<LogEntry | null>(null);
+
+  useEffect(() => {
+    if (!lastArrest) return;
+    if (seen.current === null) {
+      seen.current = lastArrest.id;
+      return;
+    }
+    if (seen.current === lastArrest.id) return;
+    seen.current = lastArrest.id;
+    setShown(lastArrest);
+    const t = setTimeout(() => setShown(null), 4500);
+    return () => clearTimeout(t);
+  }, [lastArrest]);
+
+  if (!shown) return null;
+  const success = shown.kind === 'arrest';
+
+  return (
+    <div className={`reveal-card arrest-alert ${success ? 'guilty' : 'innocent'}`} role="alert" onClick={() => setShown(null)}>
+      <div className="reveal-inner">
+        <div className="arrest-alert-icon">{success ? '🚨' : '⚠️'}</div>
+        <div className="reveal-stamp">{success ? 'Arrested' : 'Empty'}</div>
+        <h2>{success ? 'HEISTER CAUGHT!' : 'ARREST FAILED'}</h2>
+        <p>{shown.text}</p>
+        <span className="arrest-alert-hint">Click anywhere to dismiss</span>
       </div>
     </div>
   );

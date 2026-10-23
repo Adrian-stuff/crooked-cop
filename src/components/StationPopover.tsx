@@ -13,6 +13,7 @@ interface Props {
   act: (a: Action) => void;
   onClose: () => void;
   facilitator?: boolean; // the facilitator is recording for the viewer, so name them instead of "you"
+  onPing?: (station: string) => void;
 }
 
 interface Choice {
@@ -60,19 +61,20 @@ function choices(view: View, id: string): Choice[] {
       out.push({ key: 'search', label: 'Search here', note: `${me.station === id ? 'Sweeps' : 'Go there and sweep'} this station and ${sweep}`, kind: 'search', action: { type: 'search', station: id } });
     }
     if (canTarget(view, 'arrest', id) && !me.cannotArrest && view.arrestsLeft > 0) {
-      out.push({ key: 'arrest', label: 'Arrest here', note: `Wrong arrest: you sit out next round · ${view.arrestsLeft} left`, kind: 'arrest', action: { type: 'arrest', station: id } });
+      out.push({ key: 'arrest', label: 'Arrest here', note: `Wrong arrest: you sit out next round · ${view.arrestsLeft} left · within 2 stops`, kind: 'arrest', action: { type: 'arrest', station: id } });
     }
   }
   return out;
 }
 
-export function StationPopover({ view, station, ids, act, onClose, facilitator }: Props) {
+export function StationPopover({ view, station, ids, act, onClose, facilitator, onPing }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const { left, top } = stationPercent(station);
   const options = choices(view, station);
   const here = view.players.filter((p) => p.station === station && p.role !== 'spectator' && p.status !== 'escaped');
   const artifacts = view.artifacts?.[station] ?? 0;
   const isExit = view.exits.includes(station);
+  const isOfficer = view.myRole === 'police' || view.myRole === 'traitor';
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -118,8 +120,26 @@ export function StationPopover({ view, station, ids, act, onClose, facilitator }
               {c.note && <small>{c.note}</small>}
             </button>
           ))}
+          {onPing && isOfficer && view.phase !== 'lobby' && view.phase !== 'ended' && (
+            <button className="choice ping" onClick={() => { onPing(station); onClose(); }}>
+              <span>📍 Notify cops: pointing here</span>
+              <small>Alert other officers you are pointing at {stationLabel(station)}</small>
+            </button>
+          )}
         </div>
-      ) : <p className="pop-none">{noneReason(view, facilitator)}</p>}
+      ) : (
+        <>
+          <p className="pop-none">{noneReason(view, facilitator)}</p>
+          {onPing && isOfficer && view.phase !== 'lobby' && view.phase !== 'ended' && (
+            <div className="pop-choices">
+              <button className="choice ping" onClick={() => { onPing(station); onClose(); }}>
+                <span>📍 Notify cops: pointing here</span>
+                <small>Alert other officers you are pointing at {stationLabel(station)}</small>
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

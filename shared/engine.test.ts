@@ -16,12 +16,40 @@ const act = (g: GameState, id: string, a: Action, t = T0) => applyAction(g, id, 
 const byRole = (g: GameState, role: string) => g.players.filter((p) => p.role === role);
 
 function placeAll(g: GameState, where: Record<string, string> = {}): GameState {
-  const fallback = ['pureza', 'legarda', 'recto', 'lawton', 'tutuban', 'divisoria', 'pier_4', 'quirino'];
+  // Fallback pool: all non-exit stations, filtered to be at least 3 stops from any artifact for heisters.
+  const artifactIds = Object.keys(g.artifacts);
+  const allStations = STATIONS.filter((s) => !g.exits.includes(s.id)).map((s) => s.id);
+  const safeForHeister = allStations.filter((s) => artifactIds.every((art) => distance(s, art) >= 3));
+  const fallback = safeForHeister.length >= 8 ? safeForHeister : allStations;
   let i = 0;
   for (const p of g.players) {
-    g = act(g, p.id, { type: 'chooseStart', station: where[p.id] ?? fallback[i++] });
+    const station = where[p.id] ?? fallback[i++];
+    g = act(g, p.id, { type: 'chooseStart', station });
   }
   for (const p of g.players) g = act(g, p.id, { type: 'ready' });
+  return g;
+}
+
+// Directly forces player starting positions without going through chooseStart validation.
+// Use when a test needs heister starting positions that would violate the artifact-distance rule.
+function placeAllDirect(g: GameState, where: Record<string, string>): GameState {
+  g = structuredClone(g);
+  for (const p of g.players) {
+    if (p.role === 'spectator') continue;
+    const station = where[p.id] ?? 'pureza';
+    p.station = station;
+    if (p.role === 'heister') {
+      g.trails[p.id] = [{ round: 0, station }];
+      g.visits.push({ heister: p.id, station, round: 0 });
+      const n = g.artifacts[station] ?? 0;
+      if (n > 0) { p.carried += n; delete (g.artifacts as Record<string, number>)[station]; g.pickups.push({ station, round: 0 }); }
+    }
+  }
+  g.phase = 'heister';
+  g.round = 1;
+  g.deadline = T0 + g.settings.heisterSeconds * 1000;
+  for (const p of g.players) p.done = !(p.role === 'heister' && p.status === 'active');
+  g.log.push({ id: g.nextId++, round: 1, kind: 'info', text: 'Round 1: the Heisters are on the move.' });
   return g;
 }
 
@@ -93,7 +121,8 @@ describe('game flow', () => {
     let g = setup(6);
     const [h1, h2] = byRole(g, 'heister');
     g.artifacts = { recto: 1, senate_deped: 1, taytay: 1, bgc: 1 };
-    g = placeAll(g, { [h1.id]: 'lawton', [h2.id]: 'lawton' });
+    // Use placeAllDirect: heisters start at lawton which is adjacent to recto (too close for chooseStart).
+    g = placeAllDirect(g, Object.fromEntries(g.players.map((p) => [p.id, p.role === 'heister' ? 'lawton' : 'pureza'])));
     expect(g.phase).toBe('heister');
     g = act(g, h1.id, { type: 'move', path: ['recto', 'senate_deped'], express: false });
     expect(g.players.find((p) => p.id === h1.id)!.carried).toBe(2);
@@ -109,7 +138,8 @@ describe('game flow', () => {
     const [h1, h2] = byRole(g, 'heister');
     const cops = g.players.filter((p) => p.role === 'police' || p.role === 'traitor');
     g.artifacts = { recto: 3 };
-    g = placeAll(g, { [h1.id]: 'lawton', [h2.id]: 'quirino', [cops[0].id]: 'senate_deped', [cops[1].id]: 'pier_4' });
+    // lawton is adjacent to recto, so bypass chooseStart validation with placeAllDirect.
+    g = placeAllDirect(g, { [h1.id]: 'lawton', [h2.id]: 'quirino', [cops[0].id]: 'senate_deped', [cops[1].id]: 'pier_4' });
     g = act(g, h1.id, { type: 'move', path: ['recto'], express: false });
     g = act(g, h2.id, { type: 'endTurn' });
     // cops[0] at senate_deped arrests recto (adjacent) -> catches h1 with 3 artifacts
@@ -127,7 +157,8 @@ describe('game flow', () => {
     let g = setup(8);
     const hs = byRole(g, 'heister');
     const cops = g.players.filter((p) => p.role === 'police' || p.role === 'traitor');
-    g = placeAll(g, Object.fromEntries([...hs.map((h) => [h.id, 'quirino']), ...cops.map((c) => [c.id, 'pureza'])]));
+    // Use placeAllDirect: 'quirino' may be near an artifact depending on the seed.
+    g = placeAllDirect(g, Object.fromEntries([...hs.map((h) => [h.id, 'quirino']), ...cops.map((c) => [c.id, 'pureza'])]));
     for (const h of hs) g = act(g, h.id, { type: 'endTurn' });
     for (let i = 0; i < 3; i++) {
       g = act(g, cops[i].id, { type: 'arrest', station: 'legarda' });
@@ -142,6 +173,28 @@ describe('game flow', () => {
     g = placeAll(g, { [h.id]: 'carriedo_g', [cop.id]: 'carriedo_g' });
     g = act(g, h.id, { type: 'move', path: [EXIT_STATION], express: false });
     expect(() => act(g, cop.id, { type: 'arrest', station: EXIT_STATION })).toThrow(/standing on it/);
+  });
+
+  it('allows arresting up to 2 stations away, but fails at 3 stations away', () => {
+    let g = setup(4);
+    const [h] = byRole(g, 'heister');
+    const cop = g.players.find((p) => p.role === 'police')!;
+    // recto -> lawton (1) -> taytay (2) -> east_road (3)
+    expect(distance('recto', 'taytay')).toBe(2);
+    expect(distance('recto', 'east_road')).toBe(3);
+    g = placeAllDirect(g, { [h.id]: 'taytay', [cop.id]: 'recto' });
+    g = act(g, h.id, { type: 'endTurn' });
+    // Cop is at recto, arresting at taytay (2 stops away) succeeds in catching h
+    g = act(g, cop.id, { type: 'arrest', station: 'taytay' });
+    expect(g.players.find((p) => p.id === h.id)!.status).toBe('arrested');
+
+    // Test failing at 3 stops away:
+    let g2 = setup(4);
+    const cop2 = g2.players.find((p) => p.role === 'police')!;
+    const h2 = byRole(g2, 'heister')[0];
+    g2 = placeAllDirect(g2, { [cop2.id]: 'recto', [h2.id]: 'pureza' });
+    g2 = act(g2, h2.id, { type: 'endTurn' });
+    expect(() => act(g2, cop2.id, { type: 'arrest', station: 'east_road' })).toThrow(/within 2 stops/);
   });
 
   it('heister escapes with enough artifacts', () => {
@@ -251,20 +304,24 @@ describe('setup picks', () => {
   it('lets players change their start until they lock in, and ends when all are locked', () => {
     let g = setup(4);
     const [h] = byRole(g, 'heister');
-    g = act(g, h.id, { type: 'chooseStart', station: 'recto' });
-    g = act(g, h.id, { type: 'chooseStart', station: 'lawton' });
-    expect(g.players.find((p) => p.id === h.id)!.station).toBe('lawton');
+    // Find a valid station (≥3 from all artifacts) for the heister's test picks.
+    const artifactIds = Object.keys(g.artifacts);
+    const validStation = STATIONS.find((s) => !g.exits.includes(s.id) && artifactIds.every((a) => distance(s.id, a) >= 3))!.id;
+    const validStation2 = STATIONS.find((s) => !g.exits.includes(s.id) && s.id !== validStation && artifactIds.every((a) => distance(s.id, a) >= 3))!.id;
+    g = act(g, h.id, { type: 'chooseStart', station: validStation });
+    g = act(g, h.id, { type: 'chooseStart', station: validStation2 });
+    expect(g.players.find((p) => p.id === h.id)!.station).toBe(validStation2);
     expect(g.trails[h.id]).toBeUndefined(); // nothing is applied until setup ends
     const other = g.players.find((p) => p.id !== h.id)!;
     expect(() => act(g, other.id, { type: 'ready' })).toThrow(/Pick a starting station/);
     g = act(g, h.id, { type: 'ready' });
-    expect(() => act(g, h.id, { type: 'chooseStart', station: 'recto' })).toThrow(/locked in/);
+    expect(() => act(g, h.id, { type: 'chooseStart', station: validStation })).toThrow(/locked in/);
     for (const p of g.players.filter((p) => p.id !== h.id)) {
       g = act(g, p.id, { type: 'chooseStart', station: 'pureza' });
       g = act(g, p.id, { type: 'ready' });
     }
     expect(g.phase).toBe('heister');
-    expect(g.trails[h.id]).toEqual([{ round: 0, station: 'lawton' }]);
+    expect(g.trails[h.id]).toEqual([{ round: 0, station: validStation2 }]);
   });
 });
 
@@ -300,11 +357,12 @@ describe('search', () => {
 
 describe('police ultimate', () => {
   // One Heister on Recto (Purple). Officers: the first two in seat order start on Lawton (Purple/Orange interchange).
+  // Uses placeAllDirect because recto may be within 3 stops of an artifact from the default seed.
   function ready(carried: number) {
     let g = setup(4);
     const [h] = byRole(g, 'heister');
     const cops = g.players.filter((p) => p.role === 'police' || p.role === 'traitor');
-    g = placeAll(g, { [h.id]: 'recto', [cops[0].id]: 'lawton', [cops[1].id]: 'lawton', [cops[2].id]: 'quirino' });
+    g = placeAllDirect(g, { [h.id]: 'recto', [cops[0].id]: 'lawton', [cops[1].id]: 'lawton', [cops[2].id]: 'quirino' });
     g.players.find((p) => p.id === h.id)!.carried = carried;
     g = act(g, h.id, { type: 'endTurn' });
     return { g, cops };
@@ -338,6 +396,8 @@ describe('police ultimate', () => {
     // No scanning after your action, and scan-then-pass records only the scan.
     g = act(g, cops[1].id, { type: 'ultimate', line: 'purple' });
     expect(g.envelopes.at(-1)!.scan!.found).toBe(true);
+    expect(g.envelopes.at(-1)!.scan!.heistersNow).toEqual(['recto']);
+    expect(g.envelopes.at(-1)!.lines).toContain('Heister spotted at Recto.');
     g = act(g, cops[1].id, { type: 'endTurn' });
     expect(g.roundActions.filter((a) => a.by === cops[1].id).map((a) => a.kind)).toEqual(['ultimate']);
 
@@ -366,7 +426,8 @@ describe('heister express', () => {
   it('needs a round to recharge after use', () => {
     let g = setup(4);
     const [h] = byRole(g, 'heister');
-    g = placeAll(g, { [h.id]: 'lawton' });
+    // Use placeAllDirect: lawton may be near an artifact from the default seed.
+    g = placeAllDirect(g, Object.fromEntries(g.players.map((p) => [p.id, p.role === 'heister' ? 'lawton' : 'pureza'])));
     g = act(g, h.id, { type: 'move', path: ['taytay', 'east_road'], express: true });
     let t = T0;
     while (g.phase !== 'heister' || g.round !== 2) g = act(g, h.id, { type: 'tick' }, (t += 61_000));
@@ -386,7 +447,7 @@ describe('police express', () => {
     let g = setup(4);
     const [h] = byRole(g, 'heister');
     const cops = g.players.filter((p) => p.role === 'police' || p.role === 'traitor');
-    g = placeAll(g, { [h.id]: 'recto', [cops[0].id]: 'lawton', [cops[1].id]: 'pureza', [cops[2].id]: 'quirino' });
+    g = placeAllDirect(g, { [h.id]: 'recto', [cops[0].id]: 'lawton', [cops[1].id]: 'pureza', [cops[2].id]: 'quirino' });
     g.players.find((p) => p.id === h.id)!.carried = carried;
     g = act(g, h.id, { type: 'endTurn' });
     g = act(g, cops[0].id, { type: 'move', path: ['taytay', 'east_road'], express: true });
@@ -442,7 +503,8 @@ describe('exits', () => {
     let g = setup(8);
     const [h] = byRole(g, 'heister');
     const next = ADJ[SECOND_EXIT][0].to;
-    g = placeAll(g, { [h.id]: next });
+    // next is adjacent to the exit and may be near an artifact; bypass chooseStart validation.
+    g = placeAllDirect(g, Object.fromEntries(g.players.map((p) => [p.id, p.role === 'heister' ? next : 'pureza'])));
     g.players.find((p) => p.id === h.id)!.carried = 5; // half of 10
     g = act(g, h.id, { type: 'move', path: [SECOND_EXIT], express: false });
     expect(g.winner).toBe('heisters');

@@ -23,6 +23,7 @@ interface Props {
   swept?: string[]; // stations your Search covered this round
   lastSeen?: { station: string; round: number }[]; // Heisters your searches spotted recently
   chat?: ChatMessage[]; // messages from the last few seconds, shown as bubbles over the sender
+  pings?: { station: string; by: string; name: string }[];
 }
 
 const LABEL_OFFSET: Record<LabelSide, [number, number, 'start' | 'middle' | 'end']> = {
@@ -122,8 +123,8 @@ function Pawn({ p, identity, x, y, station, me, onTurn, did, focused, dimmed, sh
           {did && (
             <g transform="translate(26 26)" className={`done-badge ${did.kind} ${did.ok === false ? 'failed' : did.ok ? 'caught' : ''}`}>
               <circle r={12} />
-              <text y={5} textAnchor="middle">{DID_GLYPH[did.kind]}</text>
-              <title>{DID_TEXT[did.kind]}</title>
+              <text y={5} textAnchor="middle">{did.kind === 'arrest' ? (did.ok ? '✓' : '×') : DID_GLYPH[did.kind]}</text>
+              <title>{did.kind === 'arrest' ? (did.ok ? 'Arrest SUCCESS: Caught a Heister!' : 'Arrest FAILED: Station was empty!') : DID_TEXT[did.kind]}</title>
             </g>
           )}
           {(p.afk || !p.connected) && p.status === 'active' && (
@@ -161,7 +162,8 @@ function ChatBubbles({ chat, pawns }: { chat: ChatMessage[]; pawns: { p: PublicP
       {Object.values(latest).map((m) => {
         const pawn = pawns.find((d) => d.p.id === m.from);
         if (!pawn) return null;
-        const text = m.text.length > 38 ? `${m.text.slice(0, 37)}…` : m.text;
+        const clean = m.text.replace(/\s*\[ping:[a-z0-9_]+\]/g, '');
+        const text = clean.length > 38 ? `${clean.slice(0, 37)}…` : clean;
         const w = Math.max(80, text.length * 9.4 + 30);
         const x = Math.min(Math.max(pawn.x, -PAD + w / 2 + 6), MAP_WIDTH + PAD - w / 2 - 6);
         const tail = Math.max(-w / 2 + 16, Math.min(w / 2 - 16, pawn.x - x));
@@ -190,6 +192,7 @@ function RoundMarks({ view, lastSeen }: { view: View; lastSeen: { station: strin
   const sweeps = live ? view.roundActions.filter((a) => a.kind === 'search' && a.by !== view.me) : [];
   const swept = new Set(sweeps.flatMap((a) => searchArea(a.station)));
   const failed = live ? view.roundActions.filter((a) => a.kind === 'arrest' && a.ok === false) : [];
+  const caught = live ? view.roundActions.filter((a) => a.kind === 'arrest' && a.ok === true) : [];
   return (
     <g pointerEvents="none">
       {[...swept].map((id) => {
@@ -202,6 +205,16 @@ function RoundMarks({ view, lastSeen }: { view: View; lastSeen: { station: strin
           <g key={`fa-${a.by}`} transform={`translate(${st.x} ${st.y})`} className="failed-arrest">
             <path d="M-16 -16 L16 16 M16 -16 L-16 16" />
             <title>An arrest failed here this round</title>
+          </g>
+        );
+      })}
+      {caught.map((a) => {
+        const st = STATION_BY_ID[a.station];
+        return (
+          <g key={`ca-${a.by}`} transform={`translate(${st.x} ${st.y})`} className="caught-arrest">
+            <circle r={22} />
+            <text y={7} textAnchor="middle">✓</text>
+            <title>A Heister was CAUGHT here this round!</title>
           </g>
         );
       })}
@@ -286,7 +299,33 @@ function ArtifactLayer({ artifacts }: { artifacts: Record<string, number> | null
   );
 }
 
-export function Board({ view, marks = {}, onStation, showTrails, showNames = true, focus = null, onFocus, onPick, selected = null, swept = [], lastSeen = [], chat = [] }: Props) {
+// Visual radar pulse and tag when a teammate pings / points to a station.
+function PingLayer({ pings, ids }: { pings: { station: string; by: string; name: string }[]; ids: Record<string, Identity> }) {
+  if (!pings.length) return null;
+  return (
+    <g pointerEvents="none" className="pings-layer">
+      {pings.map((p, i) => {
+        const st = STATION_BY_ID[p.station];
+        if (!st) return null;
+        const color = (ids[p.by] ?? SPECTATOR_IDENTITY).color;
+        const tag = `📍 ${p.name}`;
+        const tagW = tag.length * 8.5 + 24;
+        return (
+          <g key={`${p.station}-${p.by}-${i}`} transform={`translate(${st.x} ${st.y})`} className="station-ping">
+            <circle r={36} className="ping-wave" stroke={color} fill="none" strokeWidth={3} />
+            <circle r={28} className="ping-core" stroke={color} fill={color} fillOpacity={0.25} strokeWidth={3} />
+            <g transform="translate(0 -38)">
+              <rect x={-tagW / 2} y={-13} width={tagW} height={24} rx={12} fill="#0b0d11ee" stroke={color} strokeWidth={2} />
+              <text y={4} textAnchor="middle" className="ping-tag">{tag}</text>
+            </g>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+export function Board({ view, marks = {}, onStation, showTrails, showNames = true, focus = null, onFocus, onPick, selected = null, swept = [], lastSeen = [], chat = [], pings = [] }: Props) {
   const ids = useMemo(() => seatIdentities(view?.players ?? []), [view?.players]);
   const exits = view?.exits ?? [EXIT_STATION];
 
@@ -383,6 +422,7 @@ export function Board({ view, marks = {}, onStation, showTrails, showNames = tru
           onClick={() => (marks[station] ? onStation?.(station) : onPick?.(station))} onHover={hover} />
       ))}
 
+      <PingLayer pings={pings} ids={ids} />
       <ChatBubbles chat={chat} pawns={pawns} />
 
       <rect x={-PAD} width={MAP_WIDTH + PAD * 2} height={MAP_HEIGHT} fill="url(#vignette)" pointerEvents="none" />

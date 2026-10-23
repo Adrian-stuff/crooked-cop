@@ -37,8 +37,10 @@ export function candidates(view: View, mode: Mode, path: string[]): string[] {
     return STATIONS.filter((s) => distance(here, s.id) <= view.settings.searchRange).map((s) => s.id);
   }
   if (mode === 'arrest') {
-    // Arresting at an exit needs you standing on it.
-    return [here, ...neighbours(here).filter((s) => !view.exits.includes(s))];
+    return STATIONS.map((s) => s.id).filter((s) => {
+      if (view.exits.includes(s)) return s === here; // exit: only if standing on it
+      return distance(here, s) <= 2;
+    });
   }
   return [];
 }

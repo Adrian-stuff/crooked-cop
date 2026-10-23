@@ -12,13 +12,18 @@ export function useEnvelopeHighlight(view: View) {
   const swept = areaOf(shown)
     ?? areaOf(view.envelopes.filter((e) => (e.kind === 'search' || e.kind === 'ultimate') && (view.godView || e.to === view.me) && e.round === view.round).at(-1));
 
-  // Stations where your own searches spotted a Heister in the last 3 rounds (latest per station).
+  // Stations where your own searches or ultimate spotted a Heister in the last 3 rounds (latest per station).
   const lastSeen = useMemo(() => {
     if (view.godView) return [];
     const seen: Record<string, number> = {};
     for (const e of view.envelopes) {
-      if (e.to !== view.me || !e.search || view.round - e.round > 2) continue;
-      for (const s of e.search.heistersNow) seen[s] = Math.max(seen[s] ?? 0, e.round);
+      if (e.to !== view.me || view.round - e.round > 2) continue;
+      if (e.search) {
+        for (const s of e.search.heistersNow) seen[s] = Math.max(seen[s] ?? 0, e.round);
+      }
+      if (e.scan?.heistersNow) {
+        for (const s of e.scan.heistersNow) seen[s] = Math.max(seen[s] ?? 0, e.round);
+      }
     }
     return Object.entries(seen).map(([station, round]) => ({ station, round }));
   }, [view.envelopes, view.me, view.round, view.godView]);

@@ -238,7 +238,15 @@ function finishSetup(g: GameState, t: number) {
       p.autoPlaced = true;
       markAfk(g, p);
     }
-    placeAt(g, p, p.station ?? pick(g, free));
+    if (!p.station) {
+      const artifactIds = Object.keys(g.artifacts);
+      const candidates = p.role === 'heister'
+        ? free.filter((s) => artifactIds.every((art) => distance(s, art) >= 3))
+        : free;
+      placeAt(g, p, pick(g, candidates.length ? candidates : free));
+    } else {
+      placeAt(g, p, p.station);
+    }
   }
   // Officer picks stay hidden from the Heisters until now, so announce them all at once.
   for (const p of g.players.filter(isPolice)) {
@@ -519,6 +527,10 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
       if (me.done) fail('You already locked in your starting station.');
       if (!ADJ[action.station]) fail('Unknown station.');
       if (me.role === 'heister' && g.exits.includes(action.station)) fail('Heisters cannot start on an Exit Station.');
+      if (me.role === 'heister') {
+        const tooClose = Object.keys(g.artifacts).some((art) => distance(action.station, art) < 3);
+        if (tooClose) fail('Heisters must start at least 3 stations away from any Artifact.');
+      }
       me.station = action.station;
       break;
     }
@@ -601,8 +613,8 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
       if (!ADJ[target]) fail('Unknown station.');
       if (g.exits.includes(target)) {
         if (me.station !== target) fail('At an Exit Station you can only arrest while standing on it.');
-      } else if (target !== me.station && !isAdjacent(me.station!, target)) {
-        fail('You can only arrest at your station or one connected stop away.');
+      } else if (distance(me.station!, target) > 2) {
+        fail('You can only arrest within 2 stops of your station.');
       }
       g.arrestsThisRound++;
       me.acted = 'arrest';
@@ -637,11 +649,17 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
       if (!linesAt(me.station!).includes(action.line)) fail('Pick a line that runs through your station.');
       me.ultimateUsed = true;
       const stations = lineStations(action.line);
-      const found = activeHeisters(g).some((h) => stations.includes(h.station!));
+      const heistersNow = [...new Set(activeHeisters(g).filter((h) => stations.includes(h.station!)).map((h) => h.station!))];
+      const found = heistersNow.length > 0;
       const line = lineName(action.line);
-      envelope(g, me.id, 'ultimate', `Ultimate: ${line} line`,
-        [found ? `At least one Heister is on the ${line} line right now.` : `No Heister is on the ${line} line right now.`],
-        { scan: { line: action.line, from: me.station!, stations, found } });
+      const lines = found
+        ? [
+            `At least one Heister is on the ${line} line right now.`,
+            `Heister spotted at ${heistersNow.map(stationLabel).join(', ')}.`,
+          ]
+        : [`No Heister is on the ${line} line right now.`];
+      envelope(g, me.id, 'ultimate', `Ultimate: ${line} line`, lines,
+        { scan: { line: action.line, from: me.station!, stations, found, heistersNow } });
       g.roundActions.push({ by: me.id, kind: 'ultimate', station: me.station!, line: action.line });
       log(g, 'info', `${me.name} played the Police Ultimate on the ${line} line.`);
       // A free action: the turn carries on, so the officer can act on what the scan found.

@@ -98,7 +98,7 @@ export function Chat({ view, messages, say }: Props) {
                   <time dateTime={new Date(m.ts).toISOString()}>{new Date(m.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time>
                 </div>
               )}
-              <div className="text">{m.text}</div>
+              <div className="text">{m.text.replace(/\s*\[ping:[a-z0-9_]+\]/g, '')}</div>
             </div>
           );
         })}

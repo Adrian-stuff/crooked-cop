@@ -70,6 +70,7 @@ export interface ScanResult {
   from: string; // the officer's station
   stations: string[]; // every station on the line
   found: boolean;
+  heistersNow: string[]; // stations on the line with a Heister on them right now
 }
 
 // What a Search found, so the client can lay it out instead of reading sentences.

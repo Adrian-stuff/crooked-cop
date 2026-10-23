@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { View } from '../../shared/types';
+import { stationLabel } from '../../shared/map';
 import { ActionDock } from '../components/ActionDock';
 import { Board } from '../components/Board';
 import { BoardLegend } from '../components/BoardLegend';
 import { BoardView } from '../components/BoardView';
 import { Chat } from '../components/Chat';
 import { Envelopes } from '../components/Envelopes';
-import { Log, PhaseBanner, PlayerList, RevealCard, RoleReveal, TopBar } from '../components/Panels';
+import { ArrestCard, Log, PhaseBanner, PlayerList, RevealCard, RoleReveal, TopBar } from '../components/Panels';
 import { StatusStrip } from '../components/StatusStrip';
 import { StationPopover } from '../components/StationPopover';
 import { seatIdentities } from '../game/identity';
@@ -39,6 +40,19 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
   const ticker = recentChat.filter((m) => !onBoard.has(m.from)).slice(-3);
   const ids = useMemo(() => seatIdentities(view.players), [view.players]);
   const { highlight, onHighlight, swept, lastSeen } = useEnvelopeHighlight(view);
+
+  // Teammate pings / location alerts from police chat in the last few seconds.
+  const pings = useMemo(() => {
+    const list: { station: string; by: string; name: string }[] = [];
+    for (const m of recentChat) {
+      if (m.channel !== 'police') continue;
+      const match = m.text.match(/\[ping:([a-z0-9_]+)\]/);
+      if (match) {
+        list.push({ station: match[1], by: m.from, name: m.name });
+      }
+    }
+    return list;
+  }, [recentChat]);
 
   // Reset any half-built selection when the phase changes.
   useEffect(() => {
@@ -84,19 +98,21 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
                 <div className="board-stage">
                   <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails}
                     showNames={showNames} focus={focus} onFocus={setFocus} selected={picked} swept={swept} lastSeen={lastSeen} chat={recentChat}
+                    pings={pings}
                     onPick={(id) => setPicked(mode || id === picked ? null : id)} />
                   {ticker.length > 0 && (
                     <div className="chat-ticker" aria-live="polite">
                       {ticker.map((m) => (
                         <div key={m.id} className={`tick ${channelKind(m.channel)}`}>
                           <span className="tick-chan">{channelLabel(m.channel)}</span>
-                          <strong style={{ color: ids[m.from]?.color }}>{m.name}</strong> {m.text}
+                          <strong style={{ color: ids[m.from]?.color }}>{m.name}</strong> {m.text.replace(/\s*\[ping:[a-z0-9_]+\]/g, '')}
                         </div>
                       ))}
                     </div>
                   )}
                   {picked && !mode && (
-                    <StationPopover view={view} station={picked} ids={ids} act={game.act} onClose={() => setPicked(null)} />
+                    <StationPopover view={view} station={picked} ids={ids} act={game.act} onClose={() => setPicked(null)}
+                      onPing={(id) => game.say('police', `📍 Pointing at ${stationLabel(id)} [ping:${id}]`)} />
                   )}
                 </div>
               </BoardView>
@@ -117,6 +133,7 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
       </div>
       <PhaseBanner view={view} />
       <RevealCard view={view} />
+      <ArrestCard view={view} />
       {showRole && <RoleReveal view={view} onClose={() => setShowRole(false)} />}
     </div>
   );
