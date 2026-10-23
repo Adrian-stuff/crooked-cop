@@ -371,6 +371,39 @@ describe('heister express', () => {
   });
 });
 
+describe('police express', () => {
+  // One Heister on Recto. The first officer in seat order starts on Lawton and takes the Orange line Express.
+  function expressed(carried: number) {
+    let g = setup(4);
+    const [h] = byRole(g, 'heister');
+    const cops = g.players.filter((p) => p.role === 'police' || p.role === 'traitor');
+    g = placeAll(g, { [h.id]: 'recto', [cops[0].id]: 'lawton', [cops[1].id]: 'pureza', [cops[2].id]: 'quirino' });
+    g.players.find((p) => p.id === h.id)!.carried = carried;
+    g = act(g, h.id, { type: 'endTurn' });
+    g = act(g, cops[0].id, { type: 'move', path: ['taytay', 'east_road'], express: true });
+    let t = T0;
+    while (g.phase !== 'police' || g.round !== 2) g = act(g, h.id, { type: 'tick' }, (t += 61_000));
+    while (g.policeTurn !== cops[0].id) g = act(g, g.policeTurn!, { type: 'endTurn' }, t);
+    return { g, t, h, cop: cops[0] };
+  }
+
+  it('needs a round to recharge, and everyone can see it', () => {
+    const { g, t, h, cop } = expressed(0);
+    expect(viewFor(g, cop.id, t).players.find((p) => p.id === cop.id)!.expressCooldown).toBe(true);
+    expect(viewFor(g, h.id, t).players.find((p) => p.id === cop.id)!.expressCooldown).toBe(true);
+    expect(() => act(g, cop.id, { type: 'move', path: ['bgc'], express: true }, t)).toThrow(/recharging/);
+    expect(() => act(g, cop.id, { type: 'move', path: ['bgc'], express: false }, t)).not.toThrow();
+  });
+
+  it('stops recharging once Pursuit starts at 3 Artifacts taken', () => {
+    const { g, t, cop } = expressed(3);
+    expect(g.ultimateUnlocked).toBe(true);
+    expect(g.log.some((e) => /Pursuit/.test(e.text))).toBe(true);
+    expect(viewFor(g, cop.id, t).players.find((p) => p.id === cop.id)!.expressCooldown).toBe(false);
+    expect(() => act(g, cop.id, { type: 'move', path: ['bgc'], express: true }, t)).not.toThrow();
+  });
+});
+
 describe('spectator chat', () => {
   it('keeps spectators quiet during play, except the facilitator in All', () => {
     let g = createGame('ABCD', 'p0', 'Host', 7);

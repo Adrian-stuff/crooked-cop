@@ -46,7 +46,7 @@ export interface Player {
   envelopeGiven: boolean;
   autoPlaced?: boolean; // placed at random when setup timed out
   cleared?: boolean; // voted on and shown not to be the Crooked Cop
-  expressRound?: number; // round a Heister last took the Express
+  expressRound?: number; // round this player last took the Express
   afk?: boolean; // let their timer run out without acting; cleared when they act
   ultimateUsed?: boolean; // officer has played their one Police Ultimate card
 }
@@ -161,7 +161,7 @@ export interface GameState {
   tipoff: Tipoff | null; // where the Heisters were at the Crooked Cop's latest tip-off
   roundActions: RoundAction[]; // officers' public actions this round
   takenThisRound: number; // Artifacts taken in this round's Heister Phase (as announced)
-  ultimateUnlocked: boolean; // the Heisters have taken enough Artifacts for officers to play their Ultimate
+  ultimateUnlocked: boolean; // the Heisters have taken enough Artifacts for officers to play their Ultimate; also Pursuit (no Express recharge)
 }
 
 export type Action =
@@ -197,7 +197,7 @@ export interface PublicPlayer {
   moved: boolean;
   acted: 'search' | 'arrest' | 'ultimate' | null;
   cleared: boolean;
-  expressCooldown: boolean; // Heister used Express last round (Heister team and facilitator only)
+  expressCooldown: boolean; // used Express last round, so it's recharging (a Heister's: Heister team and facilitator only)
   afk: boolean;
   ultimateUsed: boolean;
 }

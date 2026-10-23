@@ -133,15 +133,17 @@ export function ActionDock({ view, mode, path, setMode, setPath, act, facilitato
       </button>
     </>
   );
-  // A Heister's Express card recharges for a round after use.
+  // Express recharges for a round after use. Officers lose the recharge once Pursuit starts.
   const recharging = me.expressCooldown;
+  const pursuit = isOfficer(view.myRole) && view.ultimateUnlocked;
+  const expressTitle = recharging
+    ? `You used Express last round. It is ready again next round${isOfficer(view.myRole) ? `, or once the Heisters have taken ${ULTIMATE_UNLOCK} Artifacts` : ''}.`
+    : `Up to ${EXPRESS_STOPS} stops; you can change lines at interchanges.${pursuit ? ' Pursuit: no recharge.' : ' Recharges for a round after use.'}`;
   const moveCards = () => (
     <>
       <Card label="Move 1–2" kind="move" selected={mode === 'move'} onClick={() => pick('move')} />
-      <Card step={recharging ? 'Recharging' : undefined} label="Express" icon="/assets/card-express.png" kind="express"
-        selected={mode === 'express'} disabled={recharging}
-        title={recharging ? 'You used Express last round. It is ready again next round.' : `Up to ${EXPRESS_STOPS} stops; you can change lines at interchanges`}
-        onClick={() => pick('express')} />
+      <Card step={recharging ? 'Recharging' : pursuit ? 'Pursuit' : undefined} label="Express" icon="/assets/card-express.png" kind="express"
+        selected={mode === 'express'} disabled={recharging} title={expressTitle} onClick={() => pick('express')} />
     </>
   );
 

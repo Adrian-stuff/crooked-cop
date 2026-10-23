@@ -71,9 +71,10 @@ numbers can be changed in the lobby.
   3 arrests per round.
 - **Staying put**: moving is optional for everyone ("Stay put" / just end your turn).
 - **Express**: up to 5 stops; it keeps to its line but may change lines at an interchange, and picks up an
-  Artifact only at its final stop. A Heister's Express card
-  then recharges for one round (they can't Express two rounds in a row); officers have no cooldown. A normal move picks
-  up Artifacts at every station it passes.
+  Artifact only at its final stop. The Express card then recharges for one round (no Express two rounds in a
+  row), for Heisters and officers alike. A normal move picks up Artifacts at every station it passes.
+- **Pursuit**: once the Heisters have taken **3 Artifacts** (when the Police Ultimate unlocks), the officers'
+  Express stops recharging for the rest of the game. The Heisters' still recharges.
 - **Search**: your station or one stop away (lobby setting), and the officer **goes to** the searched station.
   It sweeps an area: at an interchange, every station one stop away on any line; elsewhere, 2 stops each way along
   the station's line. The swept stations stay highlighted for the searcher that round. The envelope says whether a Heister is there right

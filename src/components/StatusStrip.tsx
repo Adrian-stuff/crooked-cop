@@ -90,6 +90,7 @@ function TeamChips({ view }: { view: View }) {
   const chips: { key: string; text: string; tone?: string; title?: string }[] = [];
   if (officer && (view.phase === 'police' || view.phase === 'heister')) {
     chips.push({ key: 'arrests', text: `Arrests ${view.arrestsLeft}/3 left`, title: 'Team arrest attempts left this round' });
+    if (view.ultimateUnlocked) chips.push({ key: 'pursuit', text: 'Pursuit', tone: 'gold', title: "Officers' Express no longer needs to recharge" });
   }
   if (view.phase === 'info' && view.accusation) {
     const target = view.players.find((p) => p.id === view.accusation!.target)?.name ?? 'an officer';

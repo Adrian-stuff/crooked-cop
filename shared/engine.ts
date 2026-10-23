@@ -274,6 +274,7 @@ function endHeisterPhase(g: GameState, t: number) {
   if (!g.ultimateUnlocked && taken >= ULTIMATE_UNLOCK) {
     g.ultimateUnlocked = true;
     log(g, 'announce', 'Police Ultimate unlocked: each officer may scan one line for Heisters, once per game.');
+    log(g, 'announce', "Pursuit: the officers' Express no longer needs to recharge.");
   }
   g.phase = 'police';
   g.policeTurn = null;
@@ -547,7 +548,12 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
         if (me.done) fail('Your turn is over.');
         if (g.policeTurn !== me.id) fail('Wait for your turn.');
         if (me.moved || me.acted) fail('You already used your action this round.');
+        // An officer's Express recharges like a Heister's until Pursuit (the Ultimate unlock) lifts it.
+        if (action.express && me.expressRound === g.round - 1 && !g.ultimateUnlocked) {
+          fail(`Your Express card is recharging. You can use it again next round, or once the Heisters have taken ${ULTIMATE_UNLOCK} Artifacts.`);
+        }
         validatePath(me.station!, action.path, action.express);
+        if (action.express) me.expressRound = g.round;
         me.station = action.path[action.path.length - 1];
         me.moved = true;
         log(g, 'info', `${me.name} ${action.express ? 'took the Express' : 'moved'} to ${stationLabel(me.station)}.`);
@@ -814,7 +820,9 @@ export function viewFor(state: GameState, viewerId: string, t: number): View {
       cleared: !!p.cleared,
       afk: !!p.afk,
       ultimateUsed: !!p.ultimateUsed,
-      expressCooldown: p.role === 'heister' && (godView || heisterTeam) && p.expressRound === g.round - 1,
+      // Officers' moves are public, so anyone may see their recharge; a Heister's only their team.
+      expressCooldown: p.expressRound === g.round - 1
+        && (p.role === 'heister' ? godView || heisterTeam : isPolice(p) && !g.ultimateUnlocked),
     };
   });
 
