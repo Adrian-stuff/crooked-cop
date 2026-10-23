@@ -178,10 +178,8 @@ function TurnStage({ view, offset, ids, paused, act, onBack }: {
     }
   };
 
-  const focusedPlayer = focus ? view.players.find((p) => p.id === focus) : null;
-  const currentTarget = focusedPlayer ?? me;
-  const currentStation = currentTarget?.station ?? null;
-  const currentTargetName = currentTarget?.name;
+  const currentStation = me?.station ?? null;
+  const currentTargetName = me?.name;
 
   // Laid out like the online game: board and actions, with your own envelopes beside them.
   return (

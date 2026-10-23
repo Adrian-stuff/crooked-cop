@@ -65,13 +65,11 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
   }, [view.phase, view.round]);
 
   const me = view.players.find((p) => p.id === view.me);
-  const turnPlayer = view.phase === 'police' && view.policeTurn
+  const activeTarget = view.phase === 'police' && view.policeTurn
     ? view.players.find((p) => p.id === view.policeTurn)
     : me;
-  const focusedPlayer = focus ? view.players.find((p) => p.id === focus) : null;
-  const currentTarget = focusedPlayer ?? turnPlayer;
-  const currentStation = currentTarget?.station ?? null;
-  const currentTargetName = currentTarget?.name;
+  const currentStation = activeTarget?.station ?? null;
+  const currentTargetName = activeTarget?.name;
 
   useEffect(() => {
     if (view.phase === 'setup') setShowRole(true);

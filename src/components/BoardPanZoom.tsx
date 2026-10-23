@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { usePanZoom } from './usePanZoom';
 
 interface Props {
@@ -10,7 +10,6 @@ interface Props {
   maxScale?: number;
   activeStation?: string | null;
   activePlayerName?: string;
-  autoCenter?: boolean;
 }
 
 export function BoardPanZoom({
@@ -22,7 +21,6 @@ export function BoardPanZoom({
   maxScale = 4.0,
   activeStation = null,
   activePlayerName,
-  autoCenter = true,
 }: Props) {
   const {
     containerRef,
@@ -38,26 +36,6 @@ export function BoardPanZoom({
     maxScale,
     initialScale: 1.0,
   });
-
-  const lastCenteredStation = useRef<string | null>(null);
-
-  // Auto-pan camera when the active player changes, if zoomed in or screen overflows
-  useEffect(() => {
-    if (!activeStation || !autoCenter) return;
-    if (lastCenteredStation.current === activeStation) return;
-    lastCenteredStation.current = activeStation;
-
-    const container = containerRef.current;
-    const content = contentRef.current;
-    if (!container || !content) return;
-
-    const isOverflowing = content.offsetWidth > container.clientWidth || content.offsetHeight > container.clientHeight;
-    const isZoomedIn = transform.scale > 1.05;
-
-    if (isZoomedIn || isOverflowing) {
-      centerOnStation(activeStation, isZoomedIn ? transform.scale : undefined, 600);
-    }
-  }, [activeStation, autoCenter, centerOnStation, transform.scale]);
 
   const handleCenterClick = () => {
     if (activeStation) {

@@ -376,10 +376,8 @@ export function TableScreen({ table, view, link }: { table: TableGame; view: Vie
   const artifactsLeft = Object.values(view.artifacts ?? {}).reduce((a, b) => a + b, 0);
 
   const actorPlayer = actor ? view.players.find((p) => p.id === actor) : null;
-  const focusedPlayer = focus ? view.players.find((p) => p.id === focus) : null;
-  const currentTarget = focusedPlayer ?? actorPlayer;
-  const currentStation = currentTarget?.station ?? null;
-  const currentTargetName = currentTarget?.name;
+  const currentStation = actorPlayer?.station ?? null;
+  const currentTargetName = actorPlayer?.name;
 
   return (
     <div className="app game-screen table-screen">
