@@ -819,6 +819,8 @@ input, select {
   position: relative;
   overflow: hidden;
   touch-action: none;
+}
+.board-viewport.is-pannable {
   cursor: grab;
 }
 .board-viewport.dragging {

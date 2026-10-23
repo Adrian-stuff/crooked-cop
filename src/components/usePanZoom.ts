@@ -12,8 +12,10 @@ export interface UsePanZoomOptions {
   initialScale?: number;
 }
 
+const DRAG_THRESHOLD = 8; // Pixels moved before registering as a drag gesture
+
 export function usePanZoom({
-  minScale = 0.5,
+  minScale = 1.0,
   maxScale = 4.0,
   initialScale = 1.0,
 }: UsePanZoomOptions = {}) {
@@ -33,7 +35,7 @@ export function usePanZoom({
     scale: number;
     transform: Transform;
   } | null>(null);
-  const didDragRef = useRef(false);
+  const isDraggingRef = useRef(false);
 
   const applyTransform = useCallback((x: number, y: number, scale: number, transition = false) => {
     const el = contentRef.current;
@@ -61,14 +63,34 @@ export function usePanZoom({
       const origLeft = Math.max(0, (containerW - contentW) / 2);
       const origTop = Math.max(0, (containerH - contentH) / 2);
 
-      // Keep at least part of the board visible within viewport
-      const minVisibleX = Math.min(160, contentW * scale * 0.25);
-      const minVisibleY = Math.min(120, contentH * scale * 0.25);
+      const scaledW = contentW * scale;
+      const scaledH = contentH * scale;
 
-      const minX = minVisibleX - origLeft - contentW * scale;
-      const maxX = containerW - minVisibleX - origLeft;
-      const minY = minVisibleY - origTop - contentH * scale;
-      const maxY = containerH - minVisibleY - origTop;
+      let minX: number;
+      let maxX: number;
+      if (scaledW <= containerW) {
+        // Fits horizontally: keep centered
+        minX = 0;
+        maxX = 0;
+      } else {
+        // Wider than viewport: allow panning from edge to edge with a small margin
+        const margin = 40;
+        minX = containerW - origLeft - scaledW - margin;
+        maxX = -origLeft + margin;
+      }
+
+      let minY: number;
+      let maxY: number;
+      if (scaledH <= containerH) {
+        // Fits vertically: keep centered
+        minY = 0;
+        maxY = 0;
+      } else {
+        // Taller than viewport: allow panning from top to bottom with a small margin
+        const margin = 40;
+        minY = containerH - origTop - scaledH - margin;
+        maxY = -origTop + margin;
+      }
 
       return {
         x: Math.min(maxX, Math.max(minX, x)),
@@ -134,28 +156,17 @@ export function usePanZoom({
       // Primary mouse button (0) or touch/pen only
       if (e.button !== 0 && e.pointerType === 'mouse') return;
 
-      const target = e.target as HTMLElement | null;
-      if (target?.closest('button, input, select, textarea, a, [role="dialog"]')) {
+      const target = (e.target as Element | null);
+      if (target?.closest('button, input, select, textarea, a, [role="dialog"], .station-pop')) {
         return;
       }
 
-      const container = containerRef.current;
-      if (!container) return;
-
-      try {
-        container.setPointerCapture(e.pointerId);
-      } catch {
-        // Fallback for environments where setPointerCapture might fail
-      }
-
       pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      didDragRef.current = false;
+      isDraggingRef.current = false;
 
       if (pointersRef.current.size === 1) {
         startPanRef.current = { x: e.clientX, y: e.clientY };
         startTransformRef.current = { ...transformRef.current };
-        setIsDragging(true);
-        applyTransform(transformRef.current.x, transformRef.current.y, transformRef.current.scale, false);
       } else if (pointersRef.current.size === 2) {
         const [p1, p2] = Array.from(pointersRef.current.values());
         const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
@@ -168,7 +179,7 @@ export function usePanZoom({
         };
       }
     },
-    [applyTransform],
+    [],
   );
 
   const onPointerMove = useCallback(
@@ -183,9 +194,20 @@ export function usePanZoom({
       if (pointersRef.current.size === 1 && startPanRef.current) {
         const dx = e.clientX - startPanRef.current.x;
         const dy = e.clientY - startPanRef.current.y;
+        const dist = Math.hypot(dx, dy);
 
-        if (Math.hypot(dx, dy) > 6) {
-          didDragRef.current = true;
+        // Deadzone check: do not start dragging or capturing pointer until moved beyond threshold
+        if (!isDraggingRef.current) {
+          if (dist < DRAG_THRESHOLD) {
+            return;
+          }
+          isDraggingRef.current = true;
+          setIsDragging(true);
+          try {
+            container.setPointerCapture(e.pointerId);
+          } catch {
+            // Ignore if pointer capture fails
+          }
         }
 
         const rawX = startTransformRef.current.x + dx;
@@ -196,11 +218,14 @@ export function usePanZoom({
         transformRef.current.y = newY;
         applyTransform(newX, newY, transformRef.current.scale, false);
       } else if (pointersRef.current.size === 2 && initialPinchRef.current) {
+        if (!isDraggingRef.current) {
+          isDraggingRef.current = true;
+          setIsDragging(true);
+        }
+
         const [p1, p2] = Array.from(pointersRef.current.values());
         const currentDist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
         const currentCenter = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-
-        didDragRef.current = true;
 
         const factor = currentDist / (initialPinchRef.current.dist || 1);
         const nextScale = Math.min(maxScale, Math.max(minScale, initialPinchRef.current.scale * factor));
@@ -238,7 +263,7 @@ export function usePanZoom({
     pointersRef.current.delete(e.pointerId);
 
     const container = containerRef.current;
-    if (container) {
+    if (container && container.hasPointerCapture(e.pointerId)) {
       try {
         container.releasePointerCapture(e.pointerId);
       } catch {
@@ -254,10 +279,14 @@ export function usePanZoom({
     } else if (pointersRef.current.size === 0) {
       startPanRef.current = null;
       initialPinchRef.current = null;
-      setIsDragging(false);
-      setTransform({ ...transformRef.current });
 
-      if (didDragRef.current) {
+      const wasDragging = isDraggingRef.current;
+      isDraggingRef.current = false;
+      setIsDragging(false);
+
+      if (wasDragging) {
+        setTransform({ ...transformRef.current });
+        // Suppress trailing click on drag release so station/empty board is not clicked
         const suppressClick = (clickEvent: MouseEvent) => {
           clickEvent.stopPropagation();
           clickEvent.preventDefault();
@@ -265,7 +294,6 @@ export function usePanZoom({
         window.addEventListener('click', suppressClick, { capture: true, once: true });
         setTimeout(() => {
           window.removeEventListener('click', suppressClick, { capture: true });
-          didDragRef.current = false;
         }, 50);
       }
     }
@@ -273,8 +301,8 @@ export function usePanZoom({
 
   const onDoubleClick = useCallback(
     (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target?.closest('button, input, select, textarea, a, [role="dialog"]')) {
+      const target = (e.target as Element | null);
+      if (target?.closest('button, input, select, textarea, a, [role="dialog"], .station, .pawn, .station-pop')) {
         return;
       }
       if (

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { escapeTarget } from '../../shared/engine';
+import { EXIT_STATION, SECOND_EXIT, STATIONS, stationLabel } from '../../shared/map';
 import { DEFAULT_SETTINGS, type Settings } from '../../shared/types';
 import './RulesSettings.css';
 
@@ -14,7 +15,7 @@ export const RULE_PRESETS: Preset[] = [
   {
     id: 'standard',
     name: 'Standard',
-    desc: 'Balanced official rules: 15 rounds, 45–60s timers, 10 artifacts',
+    desc: 'Balanced official rules: 15 rounds, 45–60s timers, 10 artifacts, 3-stop search',
     settings: {
       maxRounds: 15,
       heisterSeconds: 60,
@@ -22,14 +23,15 @@ export const RULE_PRESETS: Preset[] = [
       infoSeconds: 60,
       setupSeconds: 60,
       artifactCount: 10,
-      searchRange: 1,
+      searchRange: 3,
       heisterCount: 'auto',
+      customExits: [],
     },
   },
   {
     id: 'blitz',
     name: 'Blitz',
-    desc: 'Fast & intense: 10 rounds, 30s timers, 8 artifacts',
+    desc: 'Fast & intense: 10 rounds, 30s timers, 8 artifacts, 2-stop search',
     settings: {
       maxRounds: 10,
       heisterSeconds: 45,
@@ -37,14 +39,15 @@ export const RULE_PRESETS: Preset[] = [
       infoSeconds: 30,
       setupSeconds: 45,
       artifactCount: 8,
-      searchRange: 1,
+      searchRange: 2,
       heisterCount: 'auto',
+      customExits: [],
     },
   },
   {
     id: 'relaxed',
     name: 'Relaxed',
-    desc: 'Generous time for beginners: 20 rounds, 60–90s timers, 12 artifacts',
+    desc: 'Generous time for beginners: 20 rounds, 60–90s timers, 12 artifacts, 3-stop search',
     settings: {
       maxRounds: 20,
       heisterSeconds: 90,
@@ -52,10 +55,22 @@ export const RULE_PRESETS: Preset[] = [
       infoSeconds: 90,
       setupSeconds: 90,
       artifactCount: 12,
-      searchRange: 1,
+      searchRange: 3,
       heisterCount: 'auto',
+      customExits: [],
     },
   },
+];
+
+const POPULAR_TERMINALS = [
+  { id: 'central_terminal', name: 'Central Terminal (Green)' },
+  { id: 'clark_airport', name: 'Clark Airport (Red)' },
+  { id: 'sjdm', name: 'San Jose del Monte (Pink)' },
+  { id: 'fpj', name: 'Fernando Poe Jr. (Green)' },
+  { id: 'e_valenzuela', name: 'E. Valenzuela (Blue)' },
+  { id: 'cainta', name: 'Cainta (Orange)' },
+  { id: 'pitx', name: 'PITX (Purple)' },
+  { id: 'tutuban', name: 'Tutuban Terminal (Purple)' },
 ];
 
 function formatSeconds(sec: number): string {
@@ -254,10 +269,23 @@ export function RulesSettings({
 
   const searchOptions = [
     { value: 0, label: '0 stops', hint: 'Officers only sweep the station they occupy' },
-    { value: 1, label: '1 stop', hint: 'Standard: Officers sweep their station and adjacent stops' },
-    { value: 2, label: '2 stops', hint: 'Wide sweep: Officers search stations up to 2 stops away' },
-    { value: 3, label: '3 stops', hint: 'Broad grid: Officers search stations up to 3 stops away' },
+    { value: 1, label: '1 stop', hint: 'Short sweep: Officers search stations up to 1 stop away' },
+    { value: 2, label: '2 stops', hint: 'Medium sweep: Officers search stations up to 2 stops away' },
+    { value: 3, label: '3 stops (Default)', hint: 'Default: Broad grid — officers search stations up to 3 stops away' },
   ];
+
+  const customExits = settings.customExits ?? [];
+  const exitMode =
+    customExits.length === 0
+      ? 'auto'
+      : customExits.length === 1 && customExits[0] === EXIT_STATION
+      ? 'single'
+      : customExits.length === 2 &&
+        customExits.includes(EXIT_STATION) &&
+        customExits.includes(SECOND_EXIT)
+      ? 'double'
+      : 'custom';
+  const activeExits = exitMode === 'auto' ? [EXIT_STATION, SECOND_EXIT] : customExits;
 
   const showObjectives = tab === 'all' || tab === 'objectives';
   const showTimers = tab === 'all' || tab === 'timers';
@@ -407,6 +435,144 @@ export function RulesSettings({
                   {opt.label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Exit Stations */}
+          <div className="rules-card">
+            <div className="rules-card-header">
+              <span className="rules-card-label">Exit Stations</span>
+              <span className="rules-card-badge subtle">
+                {exitMode === 'auto'
+                  ? 'Auto (1–2 exits)'
+                  : `${customExits.length} exit${customExits.length === 1 ? '' : 's'}`}
+              </span>
+            </div>
+            <p className="rules-card-desc">
+              Heisters escape by reaching any active exit with half the Artifacts ({escapeTarget(settings)} loot). Officers must vacate an exit if occupying it for 2 consecutive rounds.
+            </p>
+
+            <div className="rules-segmented" role="radiogroup" aria-label="Exit Stations">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={exitMode === 'auto'}
+                className={`rules-segmented-btn ${exitMode === 'auto' ? 'active' : ''}`}
+                disabled={!isHost}
+                onClick={() => onChange({ customExits: [] })}
+              >
+                Auto (Default)
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={exitMode === 'single'}
+                className={`rules-segmented-btn ${exitMode === 'single' ? 'active' : ''}`}
+                disabled={!isHost}
+                onClick={() => onChange({ customExits: [EXIT_STATION] })}
+              >
+                Central Terminal
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={exitMode === 'double'}
+                className={`rules-segmented-btn ${exitMode === 'double' ? 'active' : ''}`}
+                disabled={!isHost}
+                onClick={() => onChange({ customExits: [EXIT_STATION, SECOND_EXIT] })}
+              >
+                2 Exits
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={exitMode === 'custom'}
+                className={`rules-segmented-btn ${exitMode === 'custom' ? 'active' : ''}`}
+                disabled={!isHost}
+                onClick={() => {
+                  if (exitMode !== 'custom') {
+                    onChange({ customExits: [EXIT_STATION, SECOND_EXIT] });
+                  }
+                }}
+              >
+                Custom…
+              </button>
+            </div>
+
+            <div className="rules-exit-wrap">
+              <div className="rules-exit-chips">
+                <span className="rules-presets-label">Active exits:</span>
+                {activeExits.map((id) => (
+                  <span key={id} className="rules-exit-chip">
+                    <i className="exit-icon" />
+                    {stationLabel(id)}
+                    {isHost && exitMode !== 'auto' && customExits.length > 1 && (
+                      <button
+                        type="button"
+                        className="rules-exit-remove"
+                        onClick={() => onChange({ customExits: customExits.filter((x) => x !== id) })}
+                        title={`Remove ${stationLabel(id)} as exit`}
+                        aria-label={`Remove ${stationLabel(id)}`}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </div>
+
+              {exitMode === 'custom' && isHost && (
+                <>
+                  <div className="rules-exit-dropdown-row">
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val && !customExits.includes(val) && customExits.length < 5) {
+                          onChange({ customExits: [...customExits, val] });
+                        }
+                      }}
+                      disabled={customExits.length >= 5}
+                    >
+                      <option value="">+ Add any station as exit…</option>
+                      {STATIONS.filter((s) => !customExits.includes(s.id))
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div className="rules-exit-terminals">
+                    <span className="rules-presets-label">Quick terminals:</span>
+                    {POPULAR_TERMINALS.map((t) => {
+                      const isActive = customExits.includes(t.id);
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          className={`rules-terminal-btn ${isActive ? 'active' : ''}`}
+                          onClick={() => {
+                            if (isActive) {
+                              if (customExits.length > 1) {
+                                onChange({ customExits: customExits.filter((x) => x !== t.id) });
+                              }
+                            } else {
+                              if (customExits.length < 5) {
+                                onChange({ customExits: [...customExits, t.id] });
+                              }
+                            }
+                          }}
+                        >
+                          {isActive ? '✓ ' : '+ '}{t.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

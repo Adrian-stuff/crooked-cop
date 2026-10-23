@@ -195,7 +195,9 @@ function startGame(g: GameState, t: number) {
       ultimateUsed: false,
     });
   }
-  g.exits = exitsFor(seats.length);
+  const custom = g.settings.customExits?.filter((id) => ADJ[id]);
+  g.exits = custom && custom.length > 0 ? [...new Set(custom)] : exitsFor(seats.length);
+  if (g.exits.length === 0) g.exits = [EXIT_STATION];
   const candidates = STATIONS.filter((s) => !g.exits.includes(s.id)).map((s) => s.id);
   g.artifacts = {};
   for (const id of shuffle(g, candidates).slice(0, g.settings.artifactCount)) g.artifacts[id] = 1;
@@ -493,10 +495,21 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
       s.infoSeconds = clamp(s.infoSeconds, 10, 600);
       s.maxRounds = clamp(s.maxRounds, 1, 50);
       s.artifactCount = clamp(s.artifactCount, 1, 30);
-      s.searchRange = clamp(s.searchRange, 0, 3);
+      s.searchRange = clamp(s.searchRange, 0, 5);
       if (![1, 2, 'auto'].includes(s.heisterCount)) s.heisterCount = 'auto';
       s.allowDMs = !!s.allowDMs;
+      if (action.settings.customExits !== undefined) {
+        if (Array.isArray(action.settings.customExits)) {
+          const valid = [...new Set(action.settings.customExits.filter((id) => typeof id === 'string' && ADJ[id]))];
+          if (valid.length > 5) fail('Maximum 5 Exit Stations allowed.');
+          s.customExits = valid;
+        } else {
+          s.customExits = [];
+        }
+      }
       g.settings = s;
+      const seatCount = g.players.filter((p) => !p.wantsSpectate).length || 4;
+      g.exits = s.customExits && s.customExits.length > 0 ? s.customExits : exitsFor(seatCount);
       break;
     }
 

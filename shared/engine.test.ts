@@ -353,6 +353,18 @@ describe('search', () => {
     expect(g.players.find((p) => p.id === cop.id)!.station).toBe('recto');
     expect(g.log.at(-1)!.text).toMatch(/went to Recto and searched it/);
   });
+
+  it('defaults to 3 stops search range and allows searching 3 stops away', () => {
+    let g = setup(4);
+    expect(g.settings.searchRange).toBe(3);
+    const cop = g.players.find((p) => p.role === 'police' || p.role === 'traitor')!;
+    g = placeAll(g, { [cop.id]: 'tutuban' });
+    for (const h of byRole(g, 'heister')) g = act(g, h.id, { type: 'endTurn' });
+    while (g.policeTurn !== cop.id) g = act(g, g.policeTurn!, { type: 'endTurn' });
+    // tutuban -> lawton (1) -> recto (2) -> senate_deped (3)
+    expect(distance('tutuban', 'senate_deped')).toBe(3);
+    expect(() => act(g, cop.id, { type: 'search', station: 'senate_deped' })).not.toThrow();
+  });
 });
 
 describe('police ultimate', () => {
@@ -529,6 +541,22 @@ describe('exits', () => {
     old.exitMustClear = false;
     expect(() => (g = act(g, g.players[0].id, { type: 'tick' }))).not.toThrow();
     expect(g.exits).toEqual([EXIT_STATION]);
+  });
+
+  it('allows configuring custom exit stations in lobby', () => {
+    let g = createGame('ABCD', 'p0', 'Host', 4);
+    for (let i = 1; i < 4; i++) g = addPlayer(g, `p${i}`, `Player${i}`);
+    expect(g.settings.searchRange).toBe(3);
+    g = act(g, 'p0', { type: 'settings', settings: { customExits: ['tutuban', 'pitx'] } });
+    expect(g.settings.customExits).toEqual(['tutuban', 'pitx']);
+    expect(g.exits).toEqual(['tutuban', 'pitx']);
+    expect(viewFor(g, 'p0', 0).exits).toEqual(['tutuban', 'pitx']);
+
+    // Game starts with the configured exits
+    g = act(g, 'p0', { type: 'start' });
+    expect(g.exits).toEqual(['tutuban', 'pitx']);
+    expect(g.artifacts['tutuban']).toBeUndefined();
+    expect(g.artifacts['pitx']).toBeUndefined();
   });
 });
 

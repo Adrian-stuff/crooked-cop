@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { heisterCountFor, MAX_PLAYERS, MIN_PLAYERS } from '../../shared/engine';
-import { exitsFor, stationLabel } from '../../shared/map';
+import { EXIT_STATION, stationLabel } from '../../shared/map';
 import type { Settings, View } from '../../shared/types';
 import { RulesSettings } from '../components/RulesSettings';
 import { TokenIcon } from '../components/Token';
@@ -83,7 +83,7 @@ export function TableLobby({ table, view, link }: { table: TableGame; view: View
                 {save.dealRandom
                   ? <>With {n} players: <strong>{h} Heister{h > 1 ? 's' : ''}</strong> and <strong>{n - h} Police</strong>, one of them the Crooked Cop.</>
                   : <>Roles as marked above.</>}{' '}
-                {exitsFor(n).length > 1 ? <>Exits: <strong>{exitsFor(n).map(stationLabel).join(' and ')}</strong>.</> : <>Exit: <strong>{stationLabel(exitsFor(n)[0])}</strong>.</>}
+                {view.exits.length > 1 ? <>Exits: <strong>{view.exits.map(stationLabel).join(' and ')}</strong>.</> : <>Exit: <strong>{stationLabel(view.exits[0] ?? EXIT_STATION)}</strong>.</>}
               </>}
           </div>
 

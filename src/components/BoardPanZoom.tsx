@@ -15,7 +15,7 @@ export function BoardPanZoom({
   overlay,
   controls,
   className = '',
-  minScale = 0.5,
+  minScale = 1.0,
   maxScale = 4.0,
 }: Props) {
   const { containerRef, contentRef, transform, isDragging, zoomIn, zoomOut, reset } = usePanZoom({
@@ -25,12 +25,12 @@ export function BoardPanZoom({
   });
 
   const isTransformed =
-    transform.scale !== 1 || Math.abs(transform.x) > 1 || Math.abs(transform.y) > 1;
+    transform.scale > 1.01 || Math.abs(transform.x) > 1 || Math.abs(transform.y) > 1;
 
   return (
     <div
       ref={containerRef}
-      className={`board-scroll board-viewport ${isDragging ? 'dragging' : ''} ${className}`}
+      className={`board-scroll board-viewport ${isTransformed ? 'is-pannable' : ''} ${isDragging ? 'dragging' : ''} ${className}`}
     >
       <div
         ref={contentRef}
@@ -62,6 +62,7 @@ export function BoardPanZoom({
             type="button"
             className="zoom-btn zoom-level-btn"
             onClick={reset}
+            disabled={transform.scale <= minScale}
             title="Reset zoom to 100% (0 or double-click)"
             aria-label="Reset zoom"
           >
@@ -83,7 +84,7 @@ export function BoardPanZoom({
             type="button"
             className="zoom-reset-btn"
             onClick={reset}
-            title="Reset view (0 or double-click)"
+            title="Reset view to fit (0 or double-click)"
             aria-label="Reset view"
           >
             ⟲ Reset

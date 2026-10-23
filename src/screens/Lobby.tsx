@@ -1,5 +1,5 @@
 import { heisterCountFor, MAX_PLAYERS, MIN_PLAYERS } from '../../shared/engine';
-import { exitsFor, stationLabel } from '../../shared/map';
+import { EXIT_STATION, stationLabel } from '../../shared/map';
 import type { Settings, View } from '../../shared/types';
 import { Chat } from '../components/Chat';
 import { TopBar } from '../components/Panels';
@@ -49,7 +49,7 @@ export function Lobby({ game, view }: { game: Game; view: View }) {
           <div className="role-split">
             {canStart
               ? <>With {n} players: <strong>{h} Heister{h > 1 ? 's' : ''}</strong>, <strong>{n - h} Police</strong>, and one of the Police is secretly the <strong>Crooked Cop</strong>. Roles are dealt at random.{' '}
-                {exitsFor(n).length > 1 ? <>Two Exit Stations: <strong>{exitsFor(n).map(stationLabel).join(' and ')}</strong>.</> : <>One Exit Station: <strong>{stationLabel(exitsFor(n)[0])}</strong>.</>}</>
+                {view.exits.length > 1 ? <>Exit Stations: <strong>{view.exits.map(stationLabel).join(' and ')}</strong>.</> : <>Exit Station: <strong>{stationLabel(view.exits[0] ?? EXIT_STATION)}</strong>.</>}</>
               : n < MIN_PLAYERS ? `Need ${MIN_PLAYERS - n} more player${MIN_PLAYERS - n > 1 ? 's' : ''} to start.` : 'Too many players are seated.'}
           </div>
 

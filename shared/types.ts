@@ -13,6 +13,7 @@ export interface Settings {
   heisterCount: 'auto' | 1 | 2;
   searchRange: number; // hops from the officer's station
   allowDMs: boolean;
+  customExits?: string[]; // station IDs configured as exits (empty = auto based on seat count)
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -23,8 +24,9 @@ export const DEFAULT_SETTINGS: Settings = {
   maxRounds: 15,
   artifactCount: 10,
   heisterCount: 'auto',
-  searchRange: 1,
+  searchRange: 3,
   allowDMs: true,
+  customExits: [],
 };
 
 export interface Player {
