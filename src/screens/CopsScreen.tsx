@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Action, PublicPlayer, View } from '../../shared/types';
 import { ActionDock, RoundRecap } from '../components/ActionDock';
 import { Board } from '../components/Board';
+import { BoardLegend } from '../components/BoardLegend';
 import { Envelopes } from '../components/Envelopes';
-import { useCountdown } from '../components/Panels';
+import { Log, PlayerList, useCountdown } from '../components/Panels';
 import { StationPopover } from '../components/StationPopover';
 import { StatusStrip } from '../components/StatusStrip';
 import { TokenIcon } from '../components/Token';
+import { useEnvelopeHighlight } from '../game/envelopeHighlight';
 import { SPECTATOR_IDENTITY, seatIdentities, tokenText, type Identity } from '../game/identity';
 import { marksFor, type Mode } from '../game/selection';
 import { useTableDevice } from '../net/tableLink';
@@ -69,7 +71,7 @@ export function CopsScreen({ code }: { code: string }) {
   if (stage.kind === 'turn' && viewOf(stage.id)) {
     const id = stage.id;
     body = (
-      <TurnStage view={viewOf(id)!} offset={offset} ids={ids} paused={sync.paused}
+      <TurnStage view={viewOf(id)!} offset={offset} ids={ids} paused={sync.paused} onBack={() => setStage(next())}
         act={async (a) => {
           const problem = await act(id, a);
           if (problem) setError(problem);
@@ -136,14 +138,19 @@ function Handoff({ player, ids, base, offset, paused, onStart }: {
   );
 }
 
-function TurnStage({ view, offset, ids, paused, act }: {
-  view: View; offset: number; ids: Record<string, Identity>; paused: number | null; act: (a: Action) => Promise<void>;
+function TurnStage({ view, offset, ids, paused, act, onBack }: {
+  view: View; offset: number; ids: Record<string, Identity>; paused: number | null; act: (a: Action) => Promise<void>; onBack: () => void;
 }) {
   const [mode, setMode] = useState<Mode>(null);
   const [path, setPath] = useState<string[]>([]);
   const [picked, setPicked] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showTrails, setShowTrails] = useState(true);
+  const [showNames, setShowNames] = useState(true);
+  const [focus, setFocus] = useState<string | null>(null);
+  const { highlight, onHighlight, swept, lastSeen } = useEnvelopeHighlight(view);
   const marks = useMemo(() => (mode ? marksFor(view, mode, path) : {}), [view, mode, path]);
+  const me = view.players.find((p) => p.id === view.me)!;
   const send = (a: Action) => {
     if (busy) return;
     setBusy(true);
@@ -160,22 +167,42 @@ function TurnStage({ view, offset, ids, paused, act }: {
     }
   };
 
+  // Laid out like the online game: board and actions, with your own envelopes beside them.
   return (
-    <main className="cops-turn">
-      <div className="board-wrap">
-        <StatusStrip view={view} offset={offset} ids={ids} />
-        {paused !== null && <div className="device-banner">Timer paused by the facilitator</div>}
-        <div className="board-scroll">
-          <div className="board-stage">
-            <Board view={view} marks={marks} onStation={onStation} showNames selected={picked}
-              onPick={(id) => setPicked(mode || id === picked ? null : id)} />
-            {picked && !mode && <StationPopover view={view} station={picked} ids={ids} act={send} onClose={() => setPicked(null)} />}
+    <main className="game cops-turn">
+      <div className="board-col">
+        <div className="board-wrap">
+          <StatusStrip view={view} offset={offset} ids={ids} />
+          {paused !== null && <div className="device-banner">Timer paused by the facilitator</div>}
+          <div className="board-scroll">
+            <div className="board-stage">
+              <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails} showNames={showNames}
+                focus={focus} onFocus={setFocus} selected={picked} swept={swept} lastSeen={lastSeen}
+                onPick={(id) => setPicked(mode || id === picked ? null : id)} />
+              {picked && !mode && <StationPopover view={view} station={picked} ids={ids} act={send} onClose={() => setPicked(null)} />}
+            </div>
           </div>
+          <BoardLegend view={view} showNames={showNames} setShowNames={setShowNames} showTrails={showTrails} setShowTrails={setShowTrails} />
+        </div>
+        <div className={`cops-dock ${busy ? 'cops-busy' : ''}`} aria-busy={busy}>
+          <ActionDock view={view} mode={mode} path={path} setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={send} />
+        </div>
+        <div className="below-board">
+          <PlayerList view={{ ...view, players: view.players.filter((p) => p.role !== 'spectator') }} ids={ids} focus={focus} setFocus={setFocus} />
+          <Log view={view} />
         </div>
       </div>
-      <div className={busy ? 'cops-busy' : ''}>
-        <ActionDock view={view} mode={mode} path={path} setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={send} />
-      </div>
+      <aside className="side-col">
+        <section className="panel cops-whoami">
+          <TokenIcon role={me.role} identity={ids[me.id] ?? SPECTATOR_IDENTITY} text={tokenText(me)} size={40} />
+          <span className="cops-whoami-text">
+            <strong>{me.name}</strong>
+            <small>Private · only {me.name} looks</small>
+          </span>
+          <button className="btn ghost small" onClick={onBack} title="Wrong officer? Hand the device back without acting">Not {me.name}?</button>
+        </section>
+        <Envelopes view={view} ids={ids} highlight={highlight} onHighlight={onHighlight} />
+      </aside>
     </main>
   );
 }
@@ -237,20 +264,17 @@ function ReviewPick({ officers, ids, chosen, pick, open, cancel }: {
 }
 
 function ReviewStage({ view, ids, onDone }: { view: View; ids: Record<string, Identity>; onDone: () => void }) {
-  const [area, setArea] = useState<string | null>(null);
-  const [pinned, setPinned] = useState<string | null>(null);
-  const shown = view.envelopes.find((e) => e.id === (area ?? pinned));
+  const { highlight, onHighlight, swept, lastSeen } = useEnvelopeHighlight(view);
   const me = view.players.find((p) => p.id === view.me)!;
   return (
     <main className="cops-reveal">
       <section className="cops-card compact">
         <span className="pt-round">Private · only {me.name} looks</span>
-        <Envelopes view={view} ids={ids} highlight={area ?? pinned}
-          onHighlight={(id, pin) => (pin ? setPinned((p) => (p === id ? null : id)) : setArea(id))} />
+        <Envelopes view={view} ids={ids} highlight={highlight} onHighlight={onHighlight} />
         <button className="btn primary big" onClick={onDone}>Hide my envelopes</button>
       </section>
       <div className="board-wrap cops-reveal-board">
-        <Board view={view} showNames swept={shown?.search?.area ?? shown?.scan?.stations} />
+        <Board view={view} showNames swept={swept} lastSeen={lastSeen} />
       </div>
     </main>
   );

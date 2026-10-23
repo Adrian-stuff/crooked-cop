@@ -13,6 +13,7 @@ interface Props {
   setMode: (m: Mode) => void;
   setPath: (p: string[]) => void;
   act: (a: Action) => void;
+  facilitator?: boolean; // recording this player's move on the facilitator's device, so name them
 }
 
 const isOfficer = (role: string) => role === 'police' || role === 'traitor';
@@ -37,7 +38,7 @@ interface CardProps {
   onClick?: () => void;
 }
 
-function Card({ step, label, icon, kind = '', selected, done, disabled, title, onClick }: CardProps) {
+export function Card({ step, label, icon, kind = '', selected, done, disabled, title, onClick }: CardProps) {
   return (
     <button className={`dock-card ${kind} ${selected ? 'selected' : ''} ${done ? 'done' : ''}`}
       disabled={disabled || done} onClick={onClick} title={title} aria-pressed={selected}>
@@ -52,7 +53,7 @@ function Card({ step, label, icon, kind = '', selected, done, disabled, title, o
 
 interface DockProps { title: ReactNode; sub?: ReactNode; children?: ReactNode; tone?: string; hint?: string | null; recap?: ReactNode }
 
-function Dock({ title, sub, children, tone = '', hint, recap }: DockProps) {
+export function Dock({ title, sub, children, tone = '', hint, recap }: DockProps) {
   return (
     <section className={`dock ${tone}`} aria-label="Your actions">
       {hint && <div className="dock-hint" key={hint} role="status">{hint}</div>}
@@ -63,6 +64,22 @@ function Dock({ title, sub, children, tone = '', hint, recap }: DockProps) {
       </div>
       {children && <div className="dock-actions">{children}</div>}
     </section>
+  );
+}
+
+// One dot per officer, filled in as they vote.
+export function VoteTally({ officers, votes }: { officers: PublicPlayer[]; votes: Record<string, boolean> }) {
+  const yes = officers.filter((o) => votes[o.id] === true).length;
+  const no = officers.filter((o) => votes[o.id] === false).length;
+  const need = Math.floor(officers.length / 2) + 1;
+  return (
+    <span className="vote-tally">
+      {officers.map((o) => (
+        <i key={o.id} className={votes[o.id] === true ? 'yes' : votes[o.id] === false ? 'no' : ''}
+          title={`${o.name}: ${votes[o.id] === undefined ? 'not voted' : votes[o.id] ? 'guilty' : 'not guilty'}`} />
+      ))}
+      Guilty {yes} · Not guilty {no} · {need} needed
+    </span>
   );
 }
 
@@ -88,7 +105,7 @@ export function RoundRecap({ view }: { view: View }) {
   );
 }
 
-export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
+export function ActionDock({ view, mode, path, setMode, setPath, act, facilitator }: Props) {
   const me = view.players.find((p) => p.id === view.me);
   const [accuseTarget, setAccuseTarget] = useState('');
   const [picking, setPicking] = useState(false);
@@ -99,6 +116,7 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
   const active = me.status === 'active';
   const hint = mode ? HINT[mode] : null;
   const pick = (m: Mode) => { setPath([]); setMode(mode === m ? null : m); };
+  const whose = facilitator ? `${me.name}'s` : 'Your';
 
   // While building a route the dock turns into the route and its confirm button.
   const routing = mode === 'move' || mode === 'express';
@@ -162,8 +180,9 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
       );
     }
     return (
-      <Dock title="Choose your starting station" hint={hint}
-        sub={view.myRole === 'heister' ? 'Pick secretly. Officer picks stay hidden until setup ends. Gold coins mark the Artifacts.'
+      <Dock title={facilitator ? `Where does ${me.name} start?` : 'Choose your starting station'} hint={hint}
+        sub={facilitator ? 'Tap their station on the map. It locks in straight away, and Undo takes it back.'
+          : view.myRole === 'heister' ? 'Pick secretly. Officer picks stay hidden until setup ends. Gold coins mark the Artifacts.'
           : 'Your team sees your pick; the Heisters only see it when setup ends. Spread out to cover the network.'}>
         <Card label={mode === 'start' ? 'Click a station…' : 'Pick on the map'} kind="primary" selected={mode === 'start'} onClick={() => pick('start')} />
       </Dock>
@@ -178,9 +197,9 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
         <strong>{me.carried ?? 0}</strong>/{escapeTarget(view.settings)}
       </span>
     );
-    if (me.done) return <Dock title={`Your move, ${me.label}`} sub="Move locked in. Waiting for your partner…">{carry}</Dock>;
+    if (me.done) return <Dock title={`${whose} move, ${me.label}`} sub="Move locked in. Waiting for your partner…">{carry}</Dock>;
     return (
-      <Dock title={`Your move, ${me.label}`} hint={hint ?? 'Click any station for options'}
+      <Dock title={`${whose} move, ${me.label}`} hint={hint ?? 'Click any station for options'}
         sub="Stops on an Artifact pick it up. Express only collects at its last stop.">
         {routing ? route : (
           <>
@@ -231,9 +250,9 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
       : view.ultimateUnlocked ? 'Check whether any Heister is on a line through your station'
         : `Unlocks once the Heisters have taken ${ULTIMATE_UNLOCK} Artifacts`;
     const warn = view.exitMustClear.length ? `Exit rule: no officer may end this round on ${view.exitMustClear.map(stationLabel).join(' or ')}`
-      : me.cannotArrest ? 'You were wrongly accused: no arrests for you this round' : null;
+      : me.cannotArrest ? (facilitator ? `${me.name} was wrongly accused: no arrests this round` : 'You were wrongly accused: no arrests for you this round') : null;
     return (
-      <Dock title="Your turn, Officer" hint={hint ?? warn ?? 'Click any station for options'}
+      <Dock title={facilitator ? `${me.name}'s turn` : 'Your turn, Officer'} hint={hint ?? warn ?? 'Click any station for options'}
         sub={`Pick one action: Move, Express, Search (you go there)${view.ultimateUnlocked && !me.ultimateUsed ? ', Arrest or Ultimate' : ' or Arrest'}.`}>
         {routing ? route : (
           <>
@@ -265,19 +284,8 @@ export function ActionDock({ view, mode, path, setMode, setPath, act }: Props) {
   if (acc) {
     const target = view.players.find((p) => p.id === acc.target)!;
     const accuser = view.players.find((p) => p.id === acc.by)?.name ?? 'Someone';
-    const yes = officers.filter((o) => acc.votes[o.id] === true).length;
-    const no = officers.filter((o) => acc.votes[o.id] === false).length;
-    const need = Math.floor(officers.length / 2) + 1;
     const mine = acc.votes[me.id];
-    const tally = (
-      <span className="vote-tally">
-        {officers.map((o) => (
-          <i key={o.id} className={acc.votes[o.id] === true ? 'yes' : acc.votes[o.id] === false ? 'no' : ''}
-            title={`${o.name}: ${acc.votes[o.id] === undefined ? 'not voted' : acc.votes[o.id] ? 'guilty' : 'not guilty'}`} />
-        ))}
-        Guilty {yes} · Not guilty {no} · {need} needed
-      </span>
-    );
+    const tally = <VoteTally officers={officers} votes={acc.votes} />;
     if (officer && mine === undefined) {
       return (
         <Dock tone="deciding" title={<>Is {target.id === me.id ? 'you' : target.name} the Crooked Cop?</>}

@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { escapeTarget } from '../../shared/engine';
 import { STATIONS } from '../../shared/map';
 import type { PublicPlayer, View } from '../../shared/types';
-import { ActionDock, RoundRecap } from '../components/ActionDock';
+import { ActionDock, Card, Dock, RoundRecap, VoteTally } from '../components/ActionDock';
 import { Board, type Mark } from '../components/Board';
 import { Envelopes } from '../components/Envelopes';
 import { Log, PhaseBanner, PlayerList, RevealCard, useCountdown } from '../components/Panels';
 import { StationPopover } from '../components/StationPopover';
 import { StatusStrip } from '../components/StatusStrip';
 import { TokenIcon } from '../components/Token';
+import { useEnvelopeHighlight } from '../game/envelopeHighlight';
 import { SPECTATOR_IDENTITY, seatIdentities, tokenText, type Identity } from '../game/identity';
 import { actsThisPhase, marksFor, type Mode } from '../game/selection';
 import { deviceUrl, useFacilitatorLink, type DeviceKind, type FacilitatorLink } from '../net/tableLink';
@@ -151,73 +152,83 @@ function Recorder({ view, actor, ids, onPick }: { view: View; actor: string | nu
 }
 
 // Information Phase: record an accusation and each officer's vote, then move on.
+// Same cards and pickers as the online game's dock, with everyone's choices on one screen.
 function InfoRecorder({ table, view, ids }: { table: TableGame; view: View; ids: Record<string, Identity> }) {
+  const [picking, setPicking] = useState(false);
   const [by, setBy] = useState('');
   const [target, setTarget] = useState('');
   const officers = view.players.filter((p) => isOfficer(p.role) && p.status === 'active');
   const waiting = view.players.filter((p) => (isOfficer(p.role) || p.role === 'heister') && p.status === 'active' && !p.done);
   const acc = view.accusation;
-  const token = (p: PublicPlayer, size = 26) => <TokenIcon role={p.role} identity={ids[p.id] ?? SPECTATOR_IDENTITY} text={tokenText(p)} size={size} />;
-  const end = (
-    <button className="btn primary" disabled={!!acc} title={acc ? 'Finish the vote first' : undefined}
-      onClick={() => table.record(waiting.map((p) => [p.id, { type: 'ready' }]))}>
-      End Information Phase
-    </button>
-  );
+  const token = (p: PublicPlayer, size = 28) => <TokenIcon role={p.role} identity={ids[p.id] ?? SPECTATOR_IDENTITY} text={tokenText(p)} size={size} />;
+  const reset = () => { setPicking(false); setBy(''); setTarget(''); };
 
   if (acc) {
     const accused = view.players.find((p) => p.id === acc.target)!;
     const accuser = view.players.find((p) => p.id === acc.by);
-    const yes = officers.filter((o) => acc.votes[o.id] === true).length;
-    const no = officers.filter((o) => acc.votes[o.id] === false).length;
-    const need = Math.floor(officers.length / 2) + 1;
     return (
-      <section className="dock accusing" aria-label="Record the vote">
-        <div className="dock-text">
-          <h2>Vote: is {accused.name} the Crooked Cop?</h2>
-          <p>{accuser?.name ?? 'An officer'} called it. Record each officer's vote. Guilty {yes} · Not guilty {no} · {need} needed. The result shows as soon as it's decided.</p>
-        </div>
+      <Dock tone="accusing" title={<>Is {accused.name} the Crooked Cop?</>}
+        sub={<>{accuser?.name ?? 'An officer'} called the vote. Tap each officer's answer; the result shows as soon as it's decided. <VoteTally officers={officers} votes={acc.votes} /></>}>
         <ul className="vote-rows">
-          {officers.map((o) => (
-            <li key={o.id}>
-              {token(o)}<span className="pname">{o.name}</span>
-              <button className={`btn small arrest ${acc.votes[o.id] === true ? 'selected' : ''}`} aria-pressed={acc.votes[o.id] === true}
-                onClick={() => table.actAs(o.id, { type: 'vote', yes: true })}>Guilty</button>
-              <button className={`btn small ${acc.votes[o.id] === false ? 'selected' : ''}`} aria-pressed={acc.votes[o.id] === false}
-                onClick={() => table.actAs(o.id, { type: 'vote', yes: false })}>Not guilty</button>
-            </li>
-          ))}
+          {officers.map((o) => {
+            const vote = acc.votes[o.id];
+            return (
+              <li key={o.id}>
+                {token(o, 26)}
+                <span className="pname">{o.name}{o.id === accused.id && <small> (accused)</small>}</span>
+                <button className={`vote-choice guilty ${vote === true ? 'selected' : ''}`} aria-pressed={vote === true}
+                  onClick={() => table.actAs(o.id, { type: 'vote', yes: true })}>Guilty</button>
+                <button className={`vote-choice innocent ${vote === false ? 'selected' : ''}`} aria-pressed={vote === false}
+                  onClick={() => table.actAs(o.id, { type: 'vote', yes: false })}>Not guilty</button>
+              </li>
+            );
+          })}
         </ul>
-      </section>
+      </Dock>
     );
   }
 
-  const suspects = officers.filter((p) => p.id !== by);
+  const canAccuse = !view.accusationUsed && officers.length > 1;
+  if (picking && canAccuse) {
+    const caller = officers.find((p) => p.id === by);
+    const chosen = officers.find((p) => p.id === target && p.id !== by);
+    const picker = (list: PublicPlayer[], value: string, set: (id: string) => void) => (
+      <div className="suspects">
+        {list.map((p) => (
+          <button key={p.id} className={`suspect ${value === p.id ? 'selected' : ''}`} aria-pressed={value === p.id} onClick={() => set(p.id)}>
+            {token(p)}<span>{p.name}</span>{p.cleared && <em>cleared</em>}
+          </button>
+        ))}
+      </div>
+    );
+    return (
+      <Dock tone="deciding" title={caller ? `Who does ${caller.name} accuse?` : 'Who calls the vote?'}
+        sub="One vote per round. If the accused is innocent, they can't arrest next round.">
+        <div className="vote-steps">
+          <span className="vote-step-label">1 · Calling the vote</span>
+          {picker(officers, by, (id) => { setBy(id); if (id === target) setTarget(''); })}
+          {caller && (
+            <>
+              <span className="vote-step-label">2 · Accused</span>
+              {picker(officers.filter((p) => p.id !== by), target, setTarget)}
+            </>
+          )}
+        </div>
+        <button className="btn ghost" onClick={reset}>Cancel</button>
+        <button className="btn arrest" disabled={!caller || !chosen}
+          onClick={() => { table.actAs(by, { type: 'accuse', target }); reset(); }}>
+          {chosen ? `Call the vote on ${chosen.name}` : caller ? 'Pick the accused' : 'Pick who calls it'}
+        </button>
+      </Dock>
+    );
+  }
+
   return (
-    <section className="dock" aria-label="Information Phase">
-      <div className="dock-recap"><RoundRecap view={view} /></div>
-      <div className="dock-text">
-        <h2>Information Phase</h2>
-        <p>Players compare notes. {view.accusationUsed ? "This round's vote has been used." : 'If an officer calls a vote on the Crooked Cop, record it here.'}</p>
-      </div>
-      <div className="dock-actions">
-        {!view.accusationUsed && officers.length > 1 && (
-          <>
-            <select value={by} onChange={(e) => { setBy(e.target.value); if (e.target.value === target) setTarget(''); }} aria-label="Officer calling the vote">
-              <option value="">Who calls the vote?</option>
-              {officers.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-            </select>
-            <select value={target} onChange={(e) => setTarget(e.target.value)} disabled={!by} aria-label="Accused officer">
-              <option value="">Accusing…</option>
-              {suspects.map((o) => <option key={o.id} value={o.id}>{o.name}{o.cleared ? ' (cleared)' : ''}</option>)}
-            </select>
-            <button className="btn arrest" disabled={!by || !target}
-              onClick={() => { table.actAs(by, { type: 'accuse', target }); setBy(''); setTarget(''); }}>Start vote</button>
-          </>
-        )}
-        {end}
-      </div>
-    </section>
+    <Dock title="Information Phase" recap={<RoundRecap view={view} />}
+      sub={`Players compare notes out loud. ${view.accusationUsed ? "This round's vote has been used." : 'If an officer calls a vote on the Crooked Cop, record it here.'}`}>
+      {canAccuse && <Card label="Call a vote" kind="arrest" title="Record an officer accusing another of being the Crooked Cop" onClick={() => setPicking(true)} />}
+      <button className="btn primary" onClick={() => table.record(waiting.map((p) => [p.id, { type: 'ready' }]))}>End Information Phase</button>
+    </Dock>
   );
 }
 
@@ -299,8 +310,7 @@ export function TableScreen({ table, view, link }: { table: TableGame; view: Vie
   const [showTimer, setShowTimer] = useState(false);
   const [showTrails, setShowTrails] = useState(true);
   const [focus, setFocus] = useState<string | null>(null);
-  const [hoverEnv, setHoverEnv] = useState<string | null>(null);
-  const [pinnedEnv, setPinnedEnv] = useState<string | null>(null);
+  const { highlight, onHighlight, swept } = useEnvelopeHighlight(view);
 
   // A new player to record for starts fresh; in setup they go straight to picking a station.
   useEffect(() => {
@@ -317,14 +327,6 @@ export function TableScreen({ table, view, link }: { table: TableGame; view: Vie
     if (editArtifacts) return Object.fromEntries(STATIONS.filter((s) => !view.exits.includes(s.id)).map((s) => [s.id, 'candidate' as Mark]));
     return mode && actorView ? marksFor(actorView, mode, path) : {};
   }, [editArtifacts, mode, actorView, path, view.exits]);
-
-  const shownEnv = view.envelopes.find((e) => e.id === (hoverEnv ?? pinnedEnv));
-  const areaOf = (e?: (typeof view.envelopes)[number]) => e?.search?.area ?? e?.scan?.stations;
-  const swept = areaOf(shownEnv) ?? areaOf(view.envelopes.filter((e) => (e.kind === 'search' || e.kind === 'ultimate') && e.round === view.round).at(-1));
-  const highlightEnv = (id: string | null, pin?: boolean) => {
-    if (pin) setPinnedEnv((p) => (p === id ? null : id));
-    else setHoverEnv(id);
-  };
 
   const onStation = (id: string) => {
     if (editArtifacts) return table.toggleArtifact(id);
@@ -361,7 +363,7 @@ export function TableScreen({ table, view, link }: { table: TableGame; view: Vie
                   focus={focus} onFocus={setFocus} selected={picked} swept={swept}
                   onPick={(id) => setPicked(mode || editArtifacts || id === picked ? null : id)} />
                 {picked && !mode && (
-                  <StationPopover view={actorView ?? view} station={picked} ids={ids} act={act} onClose={() => setPicked(null)} />
+                  <StationPopover view={actorView ?? view} station={picked} ids={ids} act={act} onClose={() => setPicked(null)} facilitator />
                 )}
               </div>
             </div>
@@ -381,21 +383,19 @@ export function TableScreen({ table, view, link }: { table: TableGame; view: Vie
             </div>
           </div>
           {editArtifacts ? (
-            <section className="dock">
-              <div className="dock-text">
-                <h2>Placing Artifacts</h2>
-                <p>Tap a station to add or remove an Artifact. {artifactsLeft} placed, so a Heister escapes with {Math.ceil(artifactsLeft / 2)}.</p>
-              </div>
+            <Dock title="Placing Artifacts" hint="Tap a station to add or remove an Artifact"
+              sub={`${artifactsLeft} placed, so a Heister escapes with ${Math.ceil(artifactsLeft / 2)}.`}>
               <button className="btn primary" onClick={() => setEditArtifacts(false)}>Done</button>
-            </section>
+            </Dock>
           ) : (
-            <>
+            // The recorder rides with the dock, so whose move it is stays in sight while scrolling.
+            <div className="table-dock">
               <Recorder view={view} actor={actor} ids={ids} onPick={setChosen} />
               {view.phase === 'info'
                 ? <InfoRecorder table={table} view={view} ids={ids} />
                 : <ActionDock key={`${view.phase}:${actor}`} view={actorView ?? view} mode={mode} path={path}
-                  setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={act} />}
-            </>
+                  setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={act} facilitator={!!actorView} />}
+            </div>
           )}
           <div className="below-board">
             <PlayerList view={seatedView} ids={ids} focus={focus} setFocus={setFocus} />
@@ -403,7 +403,7 @@ export function TableScreen({ table, view, link }: { table: TableGame; view: Vie
           </div>
         </div>
         <aside className="side-col">
-          <Envelopes view={view} ids={ids} highlight={hoverEnv ?? pinnedEnv} onHighlight={highlightEnv} />
+          <Envelopes view={view} ids={ids} highlight={highlight} onHighlight={onHighlight} />
           <DevicesPanel table={table} link={link} />
           <Notes table={table} />
           {view.phase === 'ended' && (

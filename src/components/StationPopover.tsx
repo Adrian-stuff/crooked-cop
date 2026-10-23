@@ -12,6 +12,7 @@ interface Props {
   ids: Record<string, Identity>;
   act: (a: Action) => void;
   onClose: () => void;
+  facilitator?: boolean; // the facilitator is recording for the viewer, so name them instead of "you"
 }
 
 interface Choice {
@@ -65,7 +66,7 @@ function choices(view: View, id: string): Choice[] {
   return out;
 }
 
-export function StationPopover({ view, station, ids, act, onClose }: Props) {
+export function StationPopover({ view, station, ids, act, onClose, facilitator }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const { left, top } = stationPercent(station);
   const options = choices(view, station);
@@ -104,7 +105,7 @@ export function StationPopover({ view, station, ids, act, onClose }: Props) {
           {here.map((p) => (
             <span key={p.id} className="pop-who">
               <TokenIcon role={p.role} identity={ids[p.id] ?? SPECTATOR_IDENTITY} text={tokenText(p)} size={18} />
-              {p.id === view.me ? 'You' : p.name}
+              {p.id === view.me && !facilitator ? 'You' : p.name}
             </span>
           ))}
         </div>
@@ -118,19 +119,20 @@ export function StationPopover({ view, station, ids, act, onClose }: Props) {
             </button>
           ))}
         </div>
-      ) : <p className="pop-none">{noneReason(view)}</p>}
+      ) : <p className="pop-none">{noneReason(view, facilitator)}</p>}
     </div>
   );
 }
 
-function noneReason(view: View): string {
+function noneReason(view: View, facilitator?: boolean): string {
   const me = view.players.find((p) => p.id === view.me);
-  if (!me || view.myRole === 'spectator' || me.status !== 'active') return 'You are watching this case.';
-  if (me.done) return 'Your turn is done for this phase.';
+  if (facilitator && (!me || view.myRole === 'spectator')) return 'Nobody to record a move for right now.';
+  if (!me || view.myRole === 'spectator' || me.status !== 'active') return facilitator ? `${me?.name} is out of play.` : 'You are watching this case.';
+  if (me.done) return facilitator ? `${me.name}'s turn is done for this phase.` : 'Your turn is done for this phase.';
   const officer = view.myRole === 'police' || view.myRole === 'traitor';
   if (view.phase === 'police' && officer && view.policeTurn !== me.id) return 'Wait for your turn.';
   if (view.phase === 'police' && officer) return 'Out of reach this turn.';
-  if (view.phase === 'setup') return 'You start here.';
+  if (view.phase === 'setup') return facilitator ? `${me.name} starts here.` : 'You start here.';
   if (view.phase === 'heister' && view.myRole === 'heister') return 'Out of reach this turn.';
   return 'Nothing to do here this phase.';
 }
