@@ -125,6 +125,8 @@
 /* Cops device: one tablet passed around the Police team. */
 .cops-screen { min-height: 100%; }
 .cops-screen > .device-banner { margin: 10px 16px 0; }
+.cops-screen .topbar .cops-env-btn { margin-left: auto; }
+.cops-screen .topbar .cops-env-btn + .leave { margin-left: 0; }
 .cops-card {
   width: min(560px, calc(100% - 32px)); margin: 32px auto; display: flex; flex-direction: column; align-items: center; gap: 12px;
   text-align: center; padding: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
@@ -133,6 +135,9 @@
 .cops-card.compact { margin: 0; width: auto; align-items: stretch; text-align: left; }
 .cops-card.compact h1 { font-size: 28px; }
 .cops-card .suspects { justify-content: center; }
+/* The envelope list sits straight in the private card, without a second frame and heading. */
+.cops-card .envelopes { padding: 0; background: none; border: 0; box-shadow: none; }
+.cops-card .envelopes .env-head h3, .cops-card .envelopes .env-head > .muted { display: none; }
 .cops-row { display: flex; gap: 8px; }
 .cops-clock { font-family: var(--display); font-size: 40px; font-variant-numeric: tabular-nums; }
 .pt-round .cops-clock { font-size: inherit; margin-left: 6px; color: var(--text); }

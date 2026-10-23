@@ -82,7 +82,9 @@ export function DisplayScreen({ code }: { code: string }) {
           <Board view={v} showTrails={!!v.trails} showNames />
         </div>
         <aside className="display-side">
-          {v.phase === 'info' && <section className="panel display-recap"><RoundRecap view={v} /></section>}
+          {(v.phase === 'info' || (v.phase === 'police' && v.roundActions.length > 0)) && (
+            <section className="panel display-recap"><RoundRecap view={v} /></section>
+          )}
           {v.phase === 'ended' && (
             <section className={`panel display-verdict ${v.winner}`}>
               <h2>{v.winner === 'heisters' ? 'Heisters win' : 'Police win'}</h2>

@@ -65,6 +65,9 @@ export function CopsScreen({ code }: { code: string }) {
   }
 
   const next = (): Stage => (turnId ? { kind: 'handoff', id: turnId } : { kind: 'idle' });
+  // Any officer can re-read their own envelopes between turns, then the device goes back to whoever is up.
+  const review = () => setStage({ kind: 'review', id: null, open: false });
+  const canReview = base.phase !== 'lobby' && (stage.kind === 'idle' || stage.kind === 'handoff');
   const viewOf = (id: string | null) => (id ? sync.cops[id] ?? null : null);
   const ids = seatIdentities(base.players);
 
@@ -95,10 +98,10 @@ export function CopsScreen({ code }: { code: string }) {
     const v = viewOf(stage.id)!;
     body = (
       <Handoff player={v.players.find((p) => p.id === v.me)!} ids={ids} base={base} offset={offset} paused={sync.paused}
-        onStart={() => setStage({ kind: 'turn', id: stage.id, seen: v.envelopes.map((e) => e.id) })} />
+        onStart={() => setStage({ kind: 'turn', id: stage.id, seen: v.envelopes.map((e) => e.id) })} onReview={review} />
     );
   } else {
-    body = <Idle base={base} offset={offset} paused={sync.paused} onReview={() => setStage({ kind: 'review', id: null, open: false })} />;
+    body = <Idle base={base} offset={offset} paused={sync.paused} onReview={review} />;
   }
 
   return (
@@ -109,6 +112,7 @@ export function CopsScreen({ code }: { code: string }) {
           <span>Cops device</span>
         </div>
         <span className="muted small">Room {code}</span>
+        {canReview && <button className="btn small cops-env-btn" onClick={review}>My envelopes</button>}
         <button className="btn ghost small leave" onClick={() => { location.search = ''; }}>Leave</button>
       </header>
       {(!online || !facilitator) && (
@@ -126,8 +130,8 @@ function Countdown({ view, offset, paused }: { view: View; offset: number; pause
   return secs === null ? null : <span className={`cops-clock ${secs <= 10 ? 'urgent' : ''}`}>{clock(secs)}</span>;
 }
 
-function Handoff({ player, ids, base, offset, paused, onStart }: {
-  player: PublicPlayer; ids: Record<string, Identity>; base: View; offset: number; paused: number | null; onStart: () => void;
+function Handoff({ player, ids, base, offset, paused, onStart, onReview }: {
+  player: PublicPlayer; ids: Record<string, Identity>; base: View; offset: number; paused: number | null; onStart: () => void; onReview: () => void;
 }) {
   return (
     <main className="cops-card">
@@ -136,6 +140,8 @@ function Handoff({ player, ids, base, offset, paused, onStart }: {
       <h1>{player.name}'s turn</h1>
       <p className="muted">Pass the device to {player.name}. Everyone else, look away from the screen.</p>
       <button className="btn primary big" onClick={onStart}>I'm {player.name}, show my options</button>
+      {base.roundActions.length > 0 && <div className="dock-recap cops-recap"><RoundRecap view={base} /></div>}
+      <button className="btn ghost small" onClick={onReview}>Another officer wants to re-read their envelopes</button>
     </main>
   );
 }
@@ -214,26 +220,29 @@ function RevealStage({ view, seen, ids, onDone }: { view: View; seen: string[]; 
   const me = view.players.find((p) => p.id === view.me)!;
   // Wait until the facilitator's device confirms the turn is over: that's when a tip-off is written.
   const settled = me.done || view.policeTurn !== view.me || view.phase !== 'police';
-  const fresh = view.envelopes.filter((e) => !seen.includes(e.id));
-  const [area, setArea] = useState<string | null>(null);
-  const lit = fresh.find((e) => e.id === area) ?? fresh.find((e) => e.search || e.scan);
+  const fresh = view.envelopes.filter((e) => !seen.includes(e.id)).map((e) => e.id);
+  const { highlight, onHighlight, swept, lastSeen } = useEnvelopeHighlight(view);
   return (
     <main className="cops-reveal">
       <section className="cops-card compact">
         <span className="pt-round">Private · only {me.name} looks</span>
-        <h1>{me.name}'s envelope</h1>
-        {!settled ? <p className="muted">Sealing the envelope…</p>
-          : fresh.length === 0 ? (
-            <article className="envelope open cops-empty">
-              <p><strong>No envelope this turn.</strong></p>
-              <p className="muted small">Moves, arrests and passes don't come with one. Every officer sees this screen after their turn, so nobody can tell who got what.</p>
-            </article>
-          ) : <Envelopes view={{ ...view, envelopes: fresh }} ids={ids} highlight={area} onHighlight={(id) => setArea(id)} />}
-        <button className="btn primary big" disabled={!settled} onClick={onDone}>Hide it and pass the device on</button>
+        <h1>{me.name}'s envelopes</h1>
+        {!settled ? <p className="muted">Sealing the envelope…</p> : (
+          <>
+            {fresh.length === 0 && (
+              <article className="envelope open cops-empty">
+                <p><strong>No new envelope this turn.</strong></p>
+                <p className="muted small">Moves, arrests and passes don't come with one. Every officer sees this screen after their turn, so nobody can tell who got what.</p>
+              </article>
+            )}
+            <Envelopes view={view} ids={ids} highlight={highlight} onHighlight={onHighlight} fresh={fresh} />
+          </>
+        )}
+        <button className="btn primary big" disabled={!settled} onClick={onDone}>Hide them and pass the device on</button>
       </section>
-      {settled && lit && (
+      {settled && (
         <div className="board-wrap cops-reveal-board">
-          <Board view={view} showNames swept={lit.search?.area ?? lit.scan?.stations} />
+          <Board view={view} showNames swept={swept} lastSeen={lastSeen} />
         </div>
       )}
     </main>
@@ -273,6 +282,7 @@ function ReviewStage({ view, ids, onDone }: { view: View; ids: Record<string, Id
     <main className="cops-reveal">
       <section className="cops-card compact">
         <span className="pt-round">Private · only {me.name} looks</span>
+        <h1>{me.name}'s envelopes</h1>
         <Envelopes view={view} ids={ids} highlight={highlight} onHighlight={onHighlight} />
         <button className="btn primary big" onClick={onDone}>Hide my envelopes</button>
       </section>

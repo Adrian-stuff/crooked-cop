@@ -11,6 +11,7 @@ interface Props {
   ids: Record<string, Identity>;
   highlight: string | null; // envelope whose area is lit on the map
   onHighlight: (id: string | null, pin?: boolean) => void;
+  fresh?: string[]; // envelopes just handed over: marked New and opened, the rest start closed
 }
 
 const names = (ids: string[]) => ids.map(stationLabel).join(', ');
@@ -101,7 +102,7 @@ function Summary({ e, ids }: { e: Envelope; ids: Props['ids'] }) {
   return <span className="env-what">{e.title}</span>;
 }
 
-export function Envelopes({ view, ids, highlight, onHighlight }: Props) {
+export function Envelopes({ view, ids, highlight, onHighlight, fresh }: Props) {
   const [filter, setFilter] = useState<Filter>('all');
   const [open, setOpen] = useState<Record<string, boolean>>({});
   if (view.phase === 'lobby') return null;
@@ -130,13 +131,15 @@ export function Envelopes({ view, ids, highlight, onHighlight }: Props) {
       {all.length === 0 && <p className="muted">Search a station to receive a sealed envelope. Its contents are private to you.</p>}
       <div className="env-list">
         {list.map((e, i) => {
-          const isOpen = open[e.id] ?? (i === 0 && filter === 'all');
+          const isNew = fresh ? fresh.includes(e.id) : i === 0;
+          const isOpen = open[e.id] ?? (fresh ? isNew : i === 0 && filter === 'all');
           const toggle = () => setOpen((o) => ({ ...o, [e.id]: !isOpen }));
           return (
-            <article key={e.id} className={`envelope ${e.kind} ${isOpen ? 'open' : 'closed'} ${i === 0 ? 'newest' : ''}`}>
+            <article key={e.id} className={`envelope ${e.kind} ${isOpen ? 'open' : 'closed'} ${isNew ? 'newest' : ''}`}>
               <header>
                 <button className="env-toggle" onClick={toggle} aria-expanded={isOpen}>
                   <span className="env-round">R{e.round}</span>
+                  {fresh?.includes(e.id) && <span className="env-new">New</span>}
                   {isOpen ? <span className="env-what">{e.search ? stationLabel(e.search.station) : e.scan ? `Ultimate: ${lineName(e.scan.line)} line` : e.tip ? 'Crooked tip-off' : e.title}</span>
                     : <Summary e={e} ids={ids} />}
                   {to(e) && <span className="env-to">· {to(e)}</span>}

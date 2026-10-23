@@ -310,6 +310,7 @@ input, select {
 .env-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .env-round { font: 600 10px var(--ui); color: var(--muted); background: #ffffff10; padding: 2px 5px; border-radius: 4px; flex: none; }
 .envelope.open .env-round { color: var(--cream); background: #ffffff22; }
+.env-new { font: 700 10px var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: #1a1406; background: var(--gold); padding: 2px 6px; border-radius: 4px; flex: none; }
 .env-what { font-family: var(--display); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .env-to { font-size: 11px; opacity: 0.75; white-space: nowrap; }
 .env-caret { margin-left: auto; flex: none; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; opacity: 0.55; transform: translateY(-2px) rotate(45deg); transition: transform 0.2s; }
