@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { escapeTarget } from '../../shared/engine';
 import { STATIONS } from '../../shared/map';
 import type { PublicPlayer, View } from '../../shared/types';
@@ -82,8 +82,9 @@ export function TableTopBar({ table }: { table: TableGame }) {
   );
 }
 
-// Pause, add time, and a big public timer to turn towards the table.
-function TimerBar({ table, view, onShow }: { table: TableGame; view: View; onShow: () => void }) {
+// Pause, add time, and a big public timer to turn towards the table. Whose move is being recorded
+// sits in the same row, above the map, so the floating dock covers no more of the map than online.
+function TimerBar({ table, view, onShow, children }: { table: TableGame; view: View; onShow: () => void; children?: ReactNode }) {
   const running = view.deadline !== null;
   const paused = table.paused;
   if (view.phase === 'ended') return null;
@@ -95,7 +96,8 @@ function TimerBar({ table, view, onShow }: { table: TableGame; view: View; onSho
         : <button className="btn small" disabled={!running} onClick={table.pause}>Pause timer</button>}
       <button className="btn ghost small" disabled={!running && paused === null} onClick={() => table.addTime(30)}>+30s</button>
       <button className="btn ghost small" disabled={!running && paused === null} onClick={() => table.addTime(60)}>+1 min</button>
-      <button className="btn ghost small table-show" onClick={onShow} title="A full-screen timer with nothing secret on it">Show timer to table</button>
+      {children}
+      <button className="btn ghost small table-show" onClick={onShow} title="Show the table a full-screen timer with nothing secret on it">Table timer</button>
     </div>
   );
 }
@@ -352,69 +354,73 @@ export function TableScreen({ table, view, link }: { table: TableGame; view: Vie
 
   return (
     <div className="app game-screen table-screen">
-      <TableTopBar table={table} />
-      <main className="game">
-        <div className="board-col">
-          <TimerBar table={table} view={view} onShow={() => setShowTimer(true)} />
-          <div className="board-wrap">
-            <StatusStrip view={view} offset={0} ids={ids} />
-            <BoardView showKey={`${view.phase}:${view.round}:${actor}:${editArtifacts}`} dock={editArtifacts ? (
-              <Dock title="Placing Artifacts" hint="Tap a station to add or remove an Artifact"
-                sub={`${artifactsLeft} placed, so a Heister escapes with ${Math.ceil(artifactsLeft / 2)}.`}>
-                <button className="btn primary" onClick={() => setEditArtifacts(false)}>Done</button>
-              </Dock>
-            ) : (
-              // The recorder rides with the dock, so whose move it is stays in sight.
-              <div className="table-dock">
-                <Recorder view={view} actor={actor} ids={ids} onPick={setChosen} />
-                {view.phase === 'info'
-                  ? <InfoRecorder table={table} view={view} ids={ids} />
-                  : <ActionDock key={`${view.phase}:${actor}`} view={actorView ?? view} mode={mode} path={path}
-                    setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={act} facilitator={!!actorView} />}
-              </div>
-            )}>
-              <div className="board-stage">
-                <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails} showNames
-                  focus={focus} onFocus={setFocus} selected={picked} swept={swept}
-                  onPick={(id) => setPicked(mode || editArtifacts || id === picked ? null : id)} />
-                {picked && !mode && (
-                  <StationPopover view={actorView ?? view} station={picked} ids={ids} act={act} onClose={() => setPicked(null)} facilitator />
+      {/* Recording a move fits in one screen; the players list and the log sit below it. */}
+      <div className="game-fold">
+        <TableTopBar table={table} />
+        <main className="game">
+          <div className="board-col">
+            <TimerBar table={table} view={view} onShow={() => setShowTimer(true)}>
+              {!editArtifacts && <Recorder view={view} actor={actor} ids={ids} onPick={setChosen} />}
+            </TimerBar>
+            <div className="board-wrap">
+              <StatusStrip view={view} offset={0} ids={ids} />
+              <BoardView showKey={`${view.phase}:${view.round}:${actor}:${editArtifacts}`} dock={editArtifacts ? (
+                <Dock title="Placing Artifacts" hint="Tap a station to add or remove an Artifact"
+                  sub={`${artifactsLeft} placed, so a Heister escapes with ${Math.ceil(artifactsLeft / 2)}.`}>
+                  <button className="btn primary" onClick={() => setEditArtifacts(false)}>Done</button>
+                </Dock>
+              ) : (
+                <div className="table-dock">
+                  {view.phase === 'info'
+                    ? <InfoRecorder table={table} view={view} ids={ids} />
+                    : <ActionDock key={`${view.phase}:${actor}`} view={actorView ?? view} mode={mode} path={path}
+                      setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={act} facilitator={!!actorView} />}
+                </div>
+              )}>
+                <div className="board-stage">
+                  <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails} showNames
+                    focus={focus} onFocus={setFocus} selected={picked} swept={swept}
+                    onPick={(id) => setPicked(mode || editArtifacts || id === picked ? null : id)} />
+                  {picked && !mode && (
+                    <StationPopover view={actorView ?? view} station={picked} ids={ids} act={act} onClose={() => setPicked(null)} facilitator />
+                  )}
+                </div>
+              </BoardView>
+              <div className="legend">
+                <span><img src="/assets/artifact.png" alt="" width={16} height={16} /> {artifactsLeft} Artifact{artifactsLeft === 1 ? '' : 's'} on the board</span>
+                {view.phase === 'setup' && (
+                  <button className={`btn small ${editArtifacts ? 'selected' : ''}`} aria-pressed={editArtifacts}
+                    onClick={() => { setEditArtifacts(!editArtifacts); setPicked(null); }}>
+                    {editArtifacts ? 'Done placing Artifacts' : 'Move Artifacts to match the board'}
+                  </button>
                 )}
+                {view.trails && (
+                  <label className="check small">
+                    <input type="checkbox" checked={showTrails} onChange={(e) => setShowTrails(e.target.checked)} /> Heister trails
+                  </label>
+                )}
+                <a className="legend-more" href="#case-file">Players &amp; log ↓</a>
               </div>
-            </BoardView>
-            <div className="legend">
-              <span><img src="/assets/artifact.png" alt="" width={16} height={16} /> {artifactsLeft} Artifact{artifactsLeft === 1 ? '' : 's'} on the board</span>
-              {view.phase === 'setup' && (
-                <button className={`btn small ${editArtifacts ? 'selected' : ''}`} aria-pressed={editArtifacts}
-                  onClick={() => { setEditArtifacts(!editArtifacts); setPicked(null); }}>
-                  {editArtifacts ? 'Done placing Artifacts' : 'Move Artifacts to match the board'}
-                </button>
-              )}
-              {view.trails && (
-                <label className="check small">
-                  <input type="checkbox" checked={showTrails} onChange={(e) => setShowTrails(e.target.checked)} /> Heister trails
-                </label>
-              )}
             </div>
           </div>
-          <div className="below-board">
-            <PlayerList view={seatedView} ids={ids} focus={focus} setFocus={setFocus} />
-            <Log view={view} />
-          </div>
-        </div>
-        <aside className="side-col">
-          <Envelopes view={view} ids={ids} highlight={highlight} onHighlight={onHighlight} />
-          <DevicesPanel table={table} link={link} />
-          <Notes table={table} />
-          {view.phase === 'ended' && (
-            <section className="panel">
-              <h3>Game over</h3>
-              <p className="muted small">Save the full record: players and roles, the log round by round, and every clue handed out.</p>
-              <button className="btn primary" onClick={() => table.save && downloadRecord(table.save.state)}>Export record</button>
-            </section>
-          )}
-        </aside>
-      </main>
+          <aside className="side-col">
+            <Envelopes view={view} ids={ids} highlight={highlight} onHighlight={onHighlight} />
+            <DevicesPanel table={table} link={link} />
+            <Notes table={table} />
+            {view.phase === 'ended' && (
+              <section className="panel">
+                <h3>Game over</h3>
+                <p className="muted small">Save the full record: players and roles, the log round by round, and every clue handed out.</p>
+                <button className="btn primary" onClick={() => table.save && downloadRecord(table.save.state)}>Export record</button>
+              </section>
+            )}
+          </aside>
+        </main>
+      </div>
+      <div className="below-board below-fold" id="case-file">
+        <PlayerList view={seatedView} ids={ids} focus={focus} setFocus={setFocus} />
+        <Log view={view} />
+      </div>
       <PhaseBanner view={view} />
       <RevealCard view={view} />
       {showTimer && <PublicTimer table={table} view={view} onClose={() => setShowTimer(false)} />}

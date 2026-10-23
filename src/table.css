@@ -28,12 +28,12 @@
 .recorder-who.selected { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); background: #2a2516; }
 .recorder-who:disabled { opacity: 0.45; cursor: default; }
 
-/* The recording bar and the dock float over the map together. */
 .table-dock { position: relative; display: flex; flex-direction: column; gap: 8px; }
-/* Its hint floats above the recorder too. A backdrop blur would anchor the hint to the dock itself. */
-.dock-float .table-dock > .dock { position: static; backdrop-filter: none; -webkit-backdrop-filter: none; }
-.dock-float .table-dock > .dock:not(.accusing):not(.deciding) { background: #161a22f2; }
-.dock-float .recorder { background: #0f1116d6; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+/* In the timer row above the map, the recorder drops its own frame. */
+.table-bar .recorder { flex: 1 1 auto; padding: 0 4px; border: 0; border-left: 1px solid var(--line); border-radius: 0; background: none; }
+/* Only the player being recorded shows their role there, so the row stays one line. */
+.table-bar .recorder-who:not(.selected) small { display: none; }
+@media (max-width: 1365px) { .table-bar .recorder-label { display: none; } }
 
 .vote-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; flex: 1 1 320px; }
 .vote-rows li { display: flex; align-items: center; gap: 8px; }
@@ -71,6 +71,13 @@
 .pt-taken { display: flex; align-items: center; gap: 10px; font-size: clamp(16px, 2.4vw, 22px); color: #f2d58a; }
 .pt-hint { position: absolute; bottom: 20px; font-size: 13px; color: var(--muted); }
 
+/* One screen in facilitator mode too: the envelopes take the side column's spare height, and the
+   devices and notes panels scroll with them if the window is short. */
+@media (min-width: 1101px) and (min-height: 620px) {
+  .table-screen .game-fold .side-col { overflow-y: auto; }
+  .table-screen .game-fold .side-col > .panel { flex: none; }
+  .table-screen .game-fold .side-col .envelopes { flex: 1 1 auto; max-height: none; min-height: 180px; }
+}
 @media (max-width: 1100px) {
   .table-lobby { grid-template-columns: 1fr; }
   .table-screen .side-col > .panel:not(.envelopes) { order: 3; }

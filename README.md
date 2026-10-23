@@ -116,13 +116,13 @@ is saved in the browser so a reload carries on where it left off.
 
 - **Lobby**: type in each player's name. Roles are either dealt at random on the device or set to match the physical
   role cards.
-- **Recording**: a "Recording for" bar shows whose move it is. Tap a station to place a start (setup), move a Heister,
+- **Recording**: a "Recording for" row next to the timer shows whose move it is. Tap a station to place a start (setup), move a Heister,
   or search or arrest for the officer whose turn it is. The app checks each move is legal and writes the envelopes
   (searches, tip-offs, field clues) for you to read out or copy onto cards. In the Information Phase you record an
   accusation and each officer's vote.
 - **Artifacts** are placed at random. During setup, **Move Artifacts to match the board** lets you tap stations to add
   or remove them; the escape target follows the new total.
-- **Timer**: pause, resume, +30s / +1 min, and **Show timer to table**, a full-screen countdown with nothing secret on it.
+- **Timer**: pause, resume, +30s / +1 min, and **Table timer**, a full-screen countdown with nothing secret on it.
 - **Undo** takes back the last thing recorded. **Add to the log** keeps rulings and notes. **Export record** saves a
   text file with players and roles, the log round by round, and every clue.
 
