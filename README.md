@@ -67,7 +67,7 @@ numbers can be changed in the lobby.
 - **Round**: Heister Phase (60s) → Police Phase (45s per officer) → Information Phase (60s), 15 rounds. A phase
   ends early once everyone in it is done.
 - **Police turn**: officers go **one at a time** in seat order, each with their own timer. Each officer takes
-  **one** action: Move (1–2 stations), Express (up to 5 stops), Search, Arrest or (once unlocked) Ultimate, or passes. The team has
+  **one** action: Move (1–2 stations), Express (up to 5 stops), Search or Arrest, or passes (plus a free Ultimate once unlocked). The team has
   3 arrests per round.
 - **Staying put**: moving is optional for everyone ("Stay put" / just end your turn).
 - **Express**: up to 5 stops; it keeps to its line but may change lines at an interchange, and picks up an
@@ -82,7 +82,8 @@ numbers can be changed in the lobby.
   **field clue** ("a Heister is on the Pink line", "H2 is NOT within 3 stops of Bocaue", "H1 is carrying 2
   Artifacts", and so on).
 - **Police Ultimate**: unlocks for the rest of the game once the Heisters have taken **3 Artifacts**. Each officer
-  (the Crooked Cop included) may play it **once per game** as their action for the round: it scans the whole line
+  (the Crooked Cop included) may play it **once per game**, as a **free action** at the start of their turn: they
+  still take their one action afterwards, so they can act on the result straight away. It scans the whole line
   through their station and their private envelope says whether any Heister is on that line right now (yes or no,
   not where). At an interchange the officer picks which line to scan. Everyone sees that it was played and on which line.
 - **Moving only** gives no envelope (as in the GDD).

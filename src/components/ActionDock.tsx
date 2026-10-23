@@ -230,8 +230,8 @@ export function ActionDock({ view, mode, path, setMode, setPath, act, facilitato
       return (
         <Dock tone="deciding" title="Police Ultimate"
           sub={lines.length > 1
-            ? `${stationLabel(me.station!)} is an interchange. Pick which line to scan for Heisters. This uses your action and your one Ultimate.`
-            : 'Scan your whole line for Heisters. This uses your action and your one Ultimate.'}>
+            ? `${stationLabel(me.station!)} is an interchange. Pick which line to scan for Heisters. It's a free action: you still take your turn after.`
+            : "Scan your whole line for Heisters. It's a free action: you still take your turn after."}>
           {lines.map((l) => {
             const line = LINES.find((x) => x.id === l)!;
             return (
@@ -247,15 +247,20 @@ export function ActionDock({ view, mode, path, setMode, setPath, act, facilitato
       );
     }
     const ultimateStep = me.ultimateUsed ? 'Used'
-      : view.ultimateUnlocked ? 'Once per game' : `${Math.min(view.announcedTaken, ULTIMATE_UNLOCK)}/${ULTIMATE_UNLOCK} taken`;
+      : view.ultimateUnlocked ? 'Free action' : `${Math.min(view.announcedTaken, ULTIMATE_UNLOCK)}/${ULTIMATE_UNLOCK} taken`;
     const ultimateTitle = me.ultimateUsed ? 'You already played your Ultimate this game.'
-      : view.ultimateUnlocked ? 'Check whether any Heister is on a line through your station'
+      : view.ultimateUnlocked ? 'Once per game: check whether any Heister is on a line through your station, then still take your action'
         : `Unlocks once the Heisters have taken ${ULTIMATE_UNLOCK} Artifacts`;
+    // The Ultimate is free, so after a scan the officer still has their action to take.
+    const scannedNow = view.roundActions.some((a) => a.by === me.id && a.kind === 'ultimate');
     const warn = view.exitMustClear.length ? `Exit rule: no officer may end this round on ${view.exitMustClear.map(stationLabel).join(' or ')}`
       : me.cannotArrest ? (facilitator ? `${me.name} was wrongly accused: no arrests this round` : 'You were wrongly accused: no arrests for you this round') : null;
     return (
-      <Dock title={facilitator ? `${me.name}'s turn` : 'Your turn, Officer'} hint={hint ?? warn ?? 'Click any station for options'}
-        sub={`Pick one action: Move, Express, Search (you go there)${view.ultimateUnlocked && !me.ultimateUsed ? ', Arrest or Ultimate' : ' or Arrest'}.`}>
+      <Dock tone={scannedNow ? 'scanned' : ''}
+        title={scannedNow ? `Now ${facilitator ? `${me.name}'s` : 'your'} action` : facilitator ? `${me.name}'s turn` : 'Your turn, Officer'}
+        hint={hint ?? warn ?? (scannedNow ? 'The scan result is in the envelope. Now pick an action' : 'Click any station for options')}
+        sub={scannedNow ? 'The Ultimate was free. Pick one action: Move, Express, Search (you go there), Arrest or Pass.'
+          : `Pick one action: Move, Express, Search (you go there) or Arrest${view.ultimateUnlocked && !me.ultimateUsed ? ', plus a free Ultimate scan first' : ''}.`}>
         {routing ? route : (
           <>
             {moveCards()}

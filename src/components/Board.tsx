@@ -378,7 +378,7 @@ export function Board({ view, marks = {}, onStation, showTrails, showNames = tru
       {pawns.map(({ p, station, crowded, x, y }) => (
         <Pawn key={p.id} p={p} identity={ids[p.id] ?? SPECTATOR_IDENTITY} x={x} y={y} station={station}
           me={p.id === view?.me} onTurn={view?.phase === 'police' && view.policeTurn === p.id}
-          did={view && (view.phase === 'police' || view.phase === 'info') ? view.roundActions.find((a) => a.by === p.id) : undefined} focused={spot === p.id} dimmed={!!spot && spot !== p.id}
+          did={view && (view.phase === 'police' || view.phase === 'info') ? view.roundActions.filter((a) => a.by === p.id).at(-1) : undefined} focused={spot === p.id} dimmed={!!spot && spot !== p.id}
           showTag={showNames && !crowded} clickable={(!!onStation && !!marks[station]) || !!onPick}
           onClick={() => (marks[station] ? onStation?.(station) : onPick?.(station))} onHover={hover} />
       ))}

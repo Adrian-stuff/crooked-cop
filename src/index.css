@@ -731,6 +731,7 @@ input, select {
   box-shadow: 0 14px 40px #000b; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
 }
 .dock-float .dock.deciding { background: #231d10e6; border-color: var(--gold); }
+.dock-float .dock.scanned { border-color: #7a6230; }
 .dock-float .dock.accusing { background: #2a1719e6; border-color: var(--red); }
 .dock-float .dock.verdict.heisters { border-color: var(--red); }
 .dock-float .dock.verdict.police { border-color: #4f7fc0; }

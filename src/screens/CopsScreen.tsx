@@ -76,7 +76,8 @@ export function CopsScreen({ code }: { code: string }) {
         act={async (a) => {
           const problem = await act(id, a);
           if (problem) setError(problem);
-          else setStage({ kind: 'reveal', id, seen: stage.seen });
+          // The Ultimate is free: the officer stays on their turn and reads the scan beside the map.
+          else if (a.type !== 'ultimate') setStage({ kind: 'reveal', id, seen: stage.seen });
         }} />
     );
   } else if (stage.kind === 'reveal' && viewOf(stage.id)) {

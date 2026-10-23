@@ -273,7 +273,7 @@ function endHeisterPhase(g: GameState, t: number) {
   // Once unlocked the Ultimate stays available, even if an arrest later drops Artifacts back on the map.
   if (!g.ultimateUnlocked && taken >= ULTIMATE_UNLOCK) {
     g.ultimateUnlocked = true;
-    log(g, 'announce', 'Police Ultimate unlocked: each officer may scan one line for Heisters, once per game.');
+    log(g, 'announce', 'Police Ultimate unlocked: once per game, each officer may scan one line for Heisters and still take their action.');
     log(g, 'announce', "Pursuit: the officers' Express no longer needs to recharge.");
   }
   g.phase = 'police';
@@ -292,10 +292,13 @@ function endHeisterPhase(g: GameState, t: number) {
   maybeEndPolicePhase(g, t);
 }
 
+// The Ultimate is a free action: it doesn't use up the officer's one action for the round.
+const scanned = (g: GameState, p: Player) => g.roundActions.some((a) => a.by === p.id && a.kind === 'ultimate');
+
 function finishPoliceTurn(g: GameState, p: Player) {
   if (p.done) return;
   p.done = true;
-  if (p.role === 'traitor' && !p.envelopeGiven && (p.moved || p.acted)) {
+  if (p.role === 'traitor' && !p.envelopeGiven && (p.moved || p.acted || scanned(g, p))) {
     p.envelopeGiven = true;
     const lines = g.players
       .filter((h) => h.role === 'heister')
@@ -633,7 +636,6 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
       if (me.ultimateUsed) fail('You already played your Ultimate this game.');
       if (!linesAt(me.station!).includes(action.line)) fail('Pick a line that runs through your station.');
       me.ultimateUsed = true;
-      me.acted = 'ultimate';
       const stations = lineStations(action.line);
       const found = activeHeisters(g).some((h) => stations.includes(h.station!));
       const line = lineName(action.line);
@@ -642,8 +644,7 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
         { scan: { line: action.line, from: me.station!, stations, found } });
       g.roundActions.push({ by: me.id, kind: 'ultimate', station: me.station!, line: action.line });
       log(g, 'info', `${me.name} played the Police Ultimate on the ${line} line.`);
-      finishPoliceTurn(g, me);
-      maybeEndPolicePhase(g, t);
+      // A free action: the turn carries on, so the officer can act on what the scan found.
       break;
     }
 
@@ -658,7 +659,7 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
       } else if (g.phase === 'police') {
         if (!isPolice(me) || me.status !== 'active') fail('It is the Police Phase.');
         if (g.policeTurn !== me.id) fail('Wait for your turn.');
-        if (!me.moved && !me.acted) g.roundActions.push({ by: me.id, kind: 'pass', station: me.station! });
+        if (!me.moved && !me.acted && !scanned(g, me)) g.roundActions.push({ by: me.id, kind: 'pass', station: me.station! });
         finishPoliceTurn(g, me);
         maybeEndPolicePhase(g, t);
       } else fail('Nothing to end right now.');
@@ -757,7 +758,7 @@ export function advanceTime(g: GameState, t: number) {
         // The current officer ran out of time; the next one gets a fresh timer.
         const current = g.players.find((p) => p.id === g.policeTurn);
         if (current) {
-          if (!current.moved && !current.acted) markAfk(g, current);
+          if (!current.moved && !current.acted && !scanned(g, current)) markAfk(g, current);
           finishPoliceTurn(g, current);
         }
         else endPolicePhase(g, t);

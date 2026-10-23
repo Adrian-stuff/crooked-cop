@@ -316,7 +316,7 @@ describe('police ultimate', () => {
     expect(() => act(g, cops[0].id, { type: 'ultimate', line: 'purple' })).toThrow(/unlocks once/);
   });
 
-  it('scans one line through the officer\'s station, once per game, using their action', () => {
+  it('scans one line through the officer\'s station, once per game, as a free action', () => {
     const { g: start, cops } = ready(3);
     let g = start;
     expect(g.ultimateUnlocked).toBe(true);
@@ -325,12 +325,21 @@ describe('police ultimate', () => {
     g = act(g, cops[0].id, { type: 'ultimate', line: 'orange' });
     const first = g.envelopes.at(-1)!;
     expect(first).toMatchObject({ to: cops[0].id, kind: 'ultimate', scan: { line: 'orange', from: 'lawton', found: false } });
-    expect(g.players.find((p) => p.id === cops[0].id)!).toMatchObject({ done: true, station: 'lawton', ultimateUsed: true });
     expect(g.roundActions.at(-1)).toMatchObject({ by: cops[0].id, kind: 'ultimate', line: 'orange' });
     expect(g.log.at(-1)!.text).not.toMatch(/Heister/); // the result stays in the envelope
 
+    // Free: still their turn, and they still get their one action.
+    expect(g.policeTurn).toBe(cops[0].id);
+    expect(g.players.find((p) => p.id === cops[0].id)!).toMatchObject({ done: false, station: 'lawton', ultimateUsed: true });
+    expect(() => act(g, cops[0].id, { type: 'ultimate', line: 'purple' })).toThrow(/already played/);
+    g = act(g, cops[0].id, { type: 'move', path: ['recto'], express: false });
+    expect(g.players.find((p) => p.id === cops[0].id)!).toMatchObject({ done: true, station: 'recto' });
+
+    // No scanning after your action, and scan-then-pass records only the scan.
     g = act(g, cops[1].id, { type: 'ultimate', line: 'purple' });
     expect(g.envelopes.at(-1)!.scan!.found).toBe(true);
+    g = act(g, cops[1].id, { type: 'endTurn' });
+    expect(g.roundActions.filter((a) => a.by === cops[1].id).map((a) => a.kind)).toEqual(['ultimate']);
 
     // Next round the first officer's card is spent.
     let t = T0;
