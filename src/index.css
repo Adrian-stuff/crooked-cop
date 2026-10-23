@@ -739,3 +739,31 @@ input, select {
 @media (max-width: 700px) {
   .dock-float { padding: 0 6px 6px; }
 }
+
+/* ---------- Main game fits one screen ---------- */
+/* On a desktop-sized window the top bar, map, actions, envelopes and chat fill exactly one screen:
+   the map scales to the room left over and the side panels scroll inside themselves. The players
+   list and the dispatch log sit below the fold. */
+.below-fold { padding: 0 14px 14px; }
+.legend-more { margin-left: auto; color: var(--muted); text-decoration: none; }
+.legend-more:hover { color: var(--text); }
+@media (min-width: 1101px) and (min-height: 620px) {
+  .game-fold { height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
+  .game-fold > .game { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
+  .game-fold .board-col { min-height: 0; }
+  .game-fold .board-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .game-fold .board-view { flex: 1; min-height: 0; container-type: size; grid-template-rows: minmax(0, 1fr); }
+  .game-fold .board-scroll { overflow: hidden; display: flex; justify-content: center; align-items: flex-start; }
+  /* As big as fits both ways, keeping the map's shape (1920 × 1080 plus its 50px side margins). */
+  .game-fold .board-stage { min-width: 0; flex: none; width: min(100cqw, 100cqh * 2020 / 1080); }
+  .game-fold .side-col { position: static; max-height: none; min-height: 0; }
+  .game-fold .side-col .envelopes { max-height: 45%; flex: none; }
+  .game-fold .side-col .chat { flex: 1; min-height: 0; }
+}
+/* Short windows: the plain dock drops its explanation line (the cards and the hint already say it)
+   so it covers less of the map. Votes, warnings and the verdict keep theirs. */
+@media (min-width: 1101px) and (min-height: 620px) and (max-height: 800px) {
+  .game-fold .dock-float .dock:not(.accusing):not(.deciding):not(.verdict) .dock-text p { display: none; }
+  .game-fold .dock-float .dock:not(.accusing):not(.deciding):not(.verdict) .dock-text { flex: 0 1 auto; }
+  .game-fold .dock-float .dock-card { min-width: 0; padding: 6px 10px; }
+}

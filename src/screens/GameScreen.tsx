@@ -71,45 +71,50 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
 
   return (
     <div className="app game-screen">
-      <TopBar view={view} onLeave={game.leave} sound={sound} onSound={toggleSound} />
-      <main className="game">
-        <div className="board-col">
-          <div className="board-wrap">
-            <StatusStrip view={view} offset={game.clockOffset} ids={ids} />
-            <BoardView showKey={`${view.phase}:${view.round}`} dock={
-              <ActionDock key={view.phase} view={view} mode={mode} path={path} setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={game.act} />
-            }>
-              <div className="board-stage">
-                <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails}
-                  showNames={showNames} focus={focus} onFocus={setFocus} selected={picked} swept={swept} lastSeen={lastSeen} chat={recentChat}
-                  onPick={(id) => setPicked(mode || id === picked ? null : id)} />
-                {ticker.length > 0 && (
-                  <div className="chat-ticker" aria-live="polite">
-                    {ticker.map((m) => (
-                      <div key={m.id} className={`tick ${channelKind(m.channel)}`}>
-                        <span className="tick-chan">{channelLabel(m.channel)}</span>
-                        <strong style={{ color: ids[m.from]?.color }}>{m.name}</strong> {m.text}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {picked && !mode && (
-                  <StationPopover view={view} station={picked} ids={ids} act={game.act} onClose={() => setPicked(null)} />
-                )}
-              </div>
-            </BoardView>
-            <BoardLegend view={view} showNames={showNames} setShowNames={setShowNames} showTrails={showTrails} setShowTrails={setShowTrails} />
+      {/* Everything needed to play fits in one screen; the players list and the log sit below it. */}
+      <div className="game-fold">
+        <TopBar view={view} onLeave={game.leave} sound={sound} onSound={toggleSound} />
+        <main className="game">
+          <div className="board-col">
+            <div className="board-wrap">
+              <StatusStrip view={view} offset={game.clockOffset} ids={ids} />
+              <BoardView showKey={`${view.phase}:${view.round}`} dock={
+                <ActionDock key={view.phase} view={view} mode={mode} path={path} setMode={(m) => { setPicked(null); setMode(m); }} setPath={setPath} act={game.act} />
+              }>
+                <div className="board-stage">
+                  <Board view={view} marks={marks} onStation={onStation} showTrails={showTrails && !!view.trails}
+                    showNames={showNames} focus={focus} onFocus={setFocus} selected={picked} swept={swept} lastSeen={lastSeen} chat={recentChat}
+                    onPick={(id) => setPicked(mode || id === picked ? null : id)} />
+                  {ticker.length > 0 && (
+                    <div className="chat-ticker" aria-live="polite">
+                      {ticker.map((m) => (
+                        <div key={m.id} className={`tick ${channelKind(m.channel)}`}>
+                          <span className="tick-chan">{channelLabel(m.channel)}</span>
+                          <strong style={{ color: ids[m.from]?.color }}>{m.name}</strong> {m.text}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {picked && !mode && (
+                    <StationPopover view={view} station={picked} ids={ids} act={game.act} onClose={() => setPicked(null)} />
+                  )}
+                </div>
+              </BoardView>
+              <BoardLegend view={view} showNames={showNames} setShowNames={setShowNames} showTrails={showTrails} setShowTrails={setShowTrails}>
+                <a className="legend-more" href="#case-file">Players &amp; log ↓</a>
+              </BoardLegend>
+            </div>
           </div>
-          <div className="below-board">
-            <PlayerList view={view} ids={ids} focus={focus} setFocus={setFocus} />
-            <Log view={view} />
-          </div>
-        </div>
-        <aside className="side-col">
-          <Envelopes view={view} ids={ids} highlight={highlight} onHighlight={onHighlight} />
-          <Chat view={view} messages={game.chat} say={game.say} />
-        </aside>
-      </main>
+          <aside className="side-col">
+            <Envelopes view={view} ids={ids} highlight={highlight} onHighlight={onHighlight} />
+            <Chat view={view} messages={game.chat} say={game.say} />
+          </aside>
+        </main>
+      </div>
+      <div className="below-board below-fold" id="case-file">
+        <PlayerList view={view} ids={ids} focus={focus} setFocus={setFocus} />
+        <Log view={view} />
+      </div>
       <PhaseBanner view={view} />
       <RevealCard view={view} />
       {showRole && <RoleReveal view={view} onClose={() => setShowRole(false)} />}

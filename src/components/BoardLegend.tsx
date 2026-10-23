@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { View } from '../../shared/types';
 import { SPECTATOR_IDENTITY } from '../game/identity';
 import { TokenIcon } from './Token';
@@ -8,9 +9,10 @@ interface Props {
   setShowNames: (on: boolean) => void;
   showTrails: boolean;
   setShowTrails: (on: boolean) => void;
+  children?: ReactNode; // extra controls at the end of the row
 }
 
-export function BoardLegend({ view, showNames, setShowNames, showTrails, setShowTrails }: Props) {
+export function BoardLegend({ view, showNames, setShowNames, showTrails, setShowTrails, children }: Props) {
   return (
     <div className="legend">
       <span><i className="lg station" /> Station</span>
@@ -28,6 +30,7 @@ export function BoardLegend({ view, showNames, setShowNames, showTrails, setShow
           <input type="checkbox" checked={showTrails} onChange={(e) => setShowTrails(e.target.checked)} /> Heister trails
         </label>
       )}
+      {children}
     </div>
   );
 }
