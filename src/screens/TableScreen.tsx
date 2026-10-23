@@ -375,6 +375,12 @@ export function TableScreen({ table, view, link }: { table: TableGame; view: Vie
   const seatedView = { ...view, players: view.players.filter((p) => p.role !== 'spectator') };
   const artifactsLeft = Object.values(view.artifacts ?? {}).reduce((a, b) => a + b, 0);
 
+  const actorPlayer = actor ? view.players.find((p) => p.id === actor) : null;
+  const focusedPlayer = focus ? view.players.find((p) => p.id === focus) : null;
+  const currentTarget = focusedPlayer ?? actorPlayer;
+  const currentStation = currentTarget?.station ?? null;
+  const currentTargetName = currentTarget?.name;
+
   return (
     <div className="app game-screen table-screen">
       {/* Recording a move fits in one screen; the players list and the log sit below it. */}
@@ -388,6 +394,8 @@ export function TableScreen({ table, view, link }: { table: TableGame; view: Vie
             <div ref={boardWrapRef} className={`board-wrap ${fullscreen ? 'is-fullscreen' : ''}`}>
               <StatusStrip view={view} offset={0} ids={ids} />
               <BoardPanZoom
+                activeStation={currentStation}
+                activePlayerName={currentTargetName}
                 controls={
                   <button
                     type="button"

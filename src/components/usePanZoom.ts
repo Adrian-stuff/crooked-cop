@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { stationPercent } from '../game/geometry';
+import { STATION_BY_ID } from '../../shared/map';
 
 export interface Transform {
   x: number;
@@ -150,6 +152,58 @@ export function usePanZoom({
     setTransform({ x: 0, y: 0, scale: 1 });
     applyTransform(0, 0, 1, true);
   }, [applyTransform]);
+
+  const centerOnPercent = useCallback(
+    (leftPercent: number, topPercent: number, targetScale?: number, durationMs = 500) => {
+      const container = containerRef.current;
+      const content = contentRef.current;
+      if (!container || !content) return;
+
+      const currentScale = transformRef.current.scale;
+      const nextScale = targetScale !== undefined
+        ? Math.min(maxScale, Math.max(minScale, targetScale))
+        : (currentScale <= 1.05 ? 1.6 : currentScale);
+
+      const containerW = container.clientWidth;
+      const containerH = container.clientHeight;
+      const contentW = content.offsetWidth;
+      const contentH = content.offsetHeight;
+      if (!containerW || !contentW) return;
+
+      const origLeft = Math.max(0, (containerW - contentW) / 2);
+      const origTop = Math.max(0, (containerH - contentH) / 2);
+
+      const stageX = contentW * (leftPercent / 100);
+      const stageY = contentH * (topPercent / 100);
+
+      const rawX = containerW / 2 - origLeft - stageX * nextScale;
+      const rawY = containerH / 2 - origTop - stageY * nextScale;
+
+      const { x: newX, y: newY } = clampPosition(rawX, rawY, nextScale);
+
+      transformRef.current = { x: newX, y: newY, scale: nextScale };
+      setTransform({ x: newX, y: newY, scale: nextScale });
+
+      const el = contentRef.current;
+      if (el) {
+        el.style.transition = `transform ${durationMs}ms cubic-bezier(0.2, 0.8, 0.25, 1)`;
+        el.style.transform = `translate3d(${newX}px, ${newY}px, 0) scale(${nextScale})`;
+        setTimeout(() => {
+          if (el) el.style.transition = 'none';
+        }, durationMs + 30);
+      }
+    },
+    [clampPosition, maxScale, minScale],
+  );
+
+  const centerOnStation = useCallback(
+    (stationId: string, targetScale?: number, durationMs = 500) => {
+      if (!STATION_BY_ID[stationId]) return;
+      const { left, top } = stationPercent(stationId);
+      centerOnPercent(left, top, targetScale, durationMs);
+    },
+    [centerOnPercent],
+  );
 
   const onPointerDown = useCallback(
     (e: PointerEvent) => {
@@ -430,5 +484,7 @@ export function usePanZoom({
     zoomOut,
     reset,
     zoomTo,
+    centerOnPercent,
+    centerOnStation,
   };
 }

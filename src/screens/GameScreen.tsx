@@ -64,6 +64,15 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
     setPicked(null);
   }, [view.phase, view.round]);
 
+  const me = view.players.find((p) => p.id === view.me);
+  const turnPlayer = view.phase === 'police' && view.policeTurn
+    ? view.players.find((p) => p.id === view.policeTurn)
+    : me;
+  const focusedPlayer = focus ? view.players.find((p) => p.id === focus) : null;
+  const currentTarget = focusedPlayer ?? turnPlayer;
+  const currentStation = currentTarget?.station ?? null;
+  const currentTargetName = currentTarget?.name;
+
   useEffect(() => {
     if (view.phase === 'setup') setShowRole(true);
   }, [view.phase]);
@@ -96,6 +105,8 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
             <div ref={boardWrapRef} className={`board-wrap ${fullscreen ? 'is-fullscreen' : ''}`}>
               <StatusStrip view={view} offset={game.clockOffset} ids={ids} />
               <BoardPanZoom
+                activeStation={currentStation}
+                activePlayerName={currentTargetName}
                 controls={
                   <button
                     type="button"

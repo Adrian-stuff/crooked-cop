@@ -178,6 +178,11 @@ function TurnStage({ view, offset, ids, paused, act, onBack }: {
     }
   };
 
+  const focusedPlayer = focus ? view.players.find((p) => p.id === focus) : null;
+  const currentTarget = focusedPlayer ?? me;
+  const currentStation = currentTarget?.station ?? null;
+  const currentTargetName = currentTarget?.name;
+
   // Laid out like the online game: board and actions, with your own envelopes beside them.
   return (
     <main className="game cops-turn">
@@ -186,6 +191,8 @@ function TurnStage({ view, offset, ids, paused, act, onBack }: {
           <StatusStrip view={view} offset={offset} ids={ids} />
           {paused !== null && <div className="device-banner">Timer paused by the facilitator</div>}
           <BoardPanZoom
+            activeStation={currentStation}
+            activePlayerName={currentTargetName}
             controls={
               <button
                 type="button"

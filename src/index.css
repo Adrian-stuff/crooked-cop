@@ -901,6 +901,13 @@ input, select {
   opacity: 0.3;
   cursor: not-allowed;
 }
+.zoom-btn.zoom-center-btn {
+  color: var(--gold);
+}
+.zoom-btn.zoom-center-btn:hover {
+  color: #fff;
+  background: #c49a4533;
+}
 .zoom-btn.zoom-level-btn {
   font-size: 10px;
   font-weight: 600;

@@ -7,17 +7,19 @@ interface Props {
   showKey?: string;
   overlay?: ReactNode;
   controls?: ReactNode;
+  activeStation?: string | null;
+  activePlayerName?: string;
 }
 
 // The map with zoom and drag controls, plus the action dock floating over its bottom edge
 // like a game HUD.
-export function BoardView({ children, dock, showKey, overlay, controls }: Props) {
+export function BoardView({ children, dock, showKey, overlay, controls, activeStation, activePlayerName }: Props) {
   const [tucked, setTucked] = useState(false);
   useEffect(() => setTucked(false), [showKey]);
 
   return (
     <div className="board-view">
-      <BoardPanZoom overlay={overlay} controls={controls}>
+      <BoardPanZoom overlay={overlay} controls={controls} activeStation={activeStation} activePlayerName={activePlayerName}>
         {children}
       </BoardPanZoom>
 
