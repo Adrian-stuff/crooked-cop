@@ -141,7 +141,7 @@ input, select {
 @keyframes logo-in { from { opacity: 0; transform: scale(0.85) rotate(-8deg); } }
 @media (prefers-reduced-motion: reduce) { .home-logo { animation: none; } }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.tagline { font-family: var(--type); color: var(--gold); font-size: 16px; margin-top: 6px; }
+.tagline { font-family: var(--ui); font-weight: 600; color: var(--gold); font-size: 16px; margin-top: 6px; }
 .credits { display: flex; align-items: center; justify-content: center; gap: 12px; }
 .team-logo { width: 120px; height: auto; }
 .intro { margin-bottom: 22px; }
@@ -149,7 +149,23 @@ input, select {
 .home-actions { display: flex; flex-direction: column; gap: 12px; }
 .home-actions .btn.big { justify-content: center; }
 .join-row { display: flex; gap: 8px; }
-.code-input { flex: 1; text-transform: uppercase; letter-spacing: 0.3em; font-family: var(--display); font-size: 18px; text-align: center; }
+.code-input { flex: 1; text-transform: uppercase; letter-spacing: 0.2em; font-family: var(--ui); font-weight: 700; font-size: 16px; text-align: center; }
+
+.home .field > span:first-child { text-transform: none; letter-spacing: 0; font-size: 13px; }
+.code-input::placeholder { text-transform: none; letter-spacing: normal; font-weight: 400; }
+.btn.chunky { border: 3px solid #0b0d11; border-radius: 999px; box-shadow: 0 4px 0 #0b0d11; font-size: 17px; font-weight: 700; transition: transform 0.08s, box-shadow 0.08s, background 0.15s; }
+.btn.chunky.blue { background: var(--search); color: #06121f; }
+.btn.chunky:hover:not(:disabled) { border-color: #0b0d11; }
+.btn.chunky.blue:hover:not(:disabled) { background: #6bb5ff; }
+.btn.chunky:active:not(:disabled), .btn.chunky[aria-expanded='true'] { transform: translateY(3px); box-shadow: 0 1px 0 #0b0d11; }
+.join-row .btn.chunky { padding: 10px 22px; font-size: 15px; }
+.home-how { margin-top: 18px; }
+.home-how summary, .home-device summary { color: var(--muted); font-size: 12px; cursor: pointer; }
+.home-how p { max-width: 40ch; margin: 10px auto 0; color: var(--muted); font-size: 13px; }
+.home-table { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.home-table .btn { border-radius: 999px; }
+.home-device .code-input { width: 100%; margin-bottom: 8px; }
+.home-device .join-row { justify-content: center; }
 
 /* ---------- App shell ---------- */
 .app { min-height: 100%; display: flex; flex-direction: column; }
