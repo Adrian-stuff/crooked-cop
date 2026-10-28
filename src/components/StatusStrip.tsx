@@ -92,6 +92,15 @@ function TeamChips({ view }: { view: View }) {
     chips.push({ key: 'arrests', text: `Arrests ${view.arrestsLeft}/3 left`, title: 'Team arrest attempts left this round' });
     if (view.ultimateUnlocked) chips.push({ key: 'pursuit', text: 'Pursuit', tone: 'gold', title: "Officers' Express no longer needs to recharge" });
   }
+  // Stealth Mode is announced, so everyone sees it while it lasts.
+  for (const h of view.players.filter((p) => p.role === 'heister' && p.stealthUntil !== null)) {
+    chips.push({ key: `stealth-${h.id}`, text: `${h.label ?? 'Heister'} in Stealth to R${h.stealthUntil}`, tone: 'warn',
+      title: "Searches, scans and clues can't see this Heister. Arrests still work." });
+  }
+  // Only the Crooked Cop (and the facilitator) can see who is jammed.
+  for (const p of view.players.filter((x) => x.jammed)) {
+    chips.push({ key: `jam-${p.id}`, text: `${p.id === view.me ? 'You are' : `${p.name} is`} jammed`, tone: 'danger', title: 'Sabotage: their Searches and scans show no Heisters' });
+  }
   if (view.phase === 'info' && view.accusation) {
     const target = view.players.find((p) => p.id === view.accusation!.target)?.name ?? 'an officer';
     chips.push({ key: 'vote', text: `Voting on ${target}`, tone: 'danger' });

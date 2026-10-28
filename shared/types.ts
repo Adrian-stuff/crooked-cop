@@ -51,13 +51,17 @@ export interface Player {
   expressRound?: number; // round this player last took the Express
   afk?: boolean; // let their timer run out without acting; cleared when they act
   ultimateUsed?: boolean; // officer has played their one Police Ultimate card
+  stealthUsed?: boolean; // Heister has played their one Stealth Mode
+  stealthUntil?: number; // Heister is hidden from Searches, scans and clues through the end of this round
+  sabotageUsed?: boolean; // Crooked Cop has played their one Sabotage
+  jammedUntil?: number; // officer's Searches and scans are secretly jammed through the end of this round
 }
 
 export interface Envelope {
   id: string;
   to: string;
   round: number;
-  kind: 'search' | 'traitor' | 'clue' | 'ultimate';
+  kind: 'search' | 'traitor' | 'clue' | 'ultimate' | 'sabotage';
   title: string;
   lines: string[]; // plain-text version, for older clients and saved games
   search?: SearchResult;
@@ -65,13 +69,15 @@ export interface Envelope {
   scan?: ScanResult;
 }
 
-// What a Police Ultimate found: whether any Heister is on the chosen line right now.
+// What a Police Ultimate found: whether any Heister is on the chosen line right now and,
+// for each one, 3 stations in a row on the line that they're somewhere among.
 export interface ScanResult {
   line: string;
   from: string; // the officer's station
   stations: string[]; // every station on the line
   found: boolean;
-  heistersNow: string[]; // stations on the line with a Heister on them right now
+  zones?: string[][]; // one stretch of 3 neighbouring stations per Heister spotted
+  heistersNow?: string[]; // exact stations; only in scans from games saved before zones
 }
 
 // What a Search found, so the client can lay it out instead of reading sentences.
@@ -133,6 +139,7 @@ export interface Visit {
   heister: string;
   station: string;
   round: number;
+  hidden?: boolean; // made in Stealth Mode, so it leaves no tracks
 }
 
 export interface GameState {
@@ -176,6 +183,8 @@ export type Action =
   | { type: 'search'; station: string }
   | { type: 'arrest'; station: string }
   | { type: 'ultimate'; line: string }
+  | { type: 'stealth' }
+  | { type: 'sabotage'; target: string }
   | { type: 'endTurn' }
   | { type: 'accuse'; target: string }
   | { type: 'vote'; yes: boolean }
@@ -203,6 +212,10 @@ export interface PublicPlayer {
   expressCooldown: boolean; // used Express last round, so it's recharging (a Heister's: Heister team and facilitator only)
   afk: boolean;
   ultimateUsed: boolean;
+  stealthUsed: boolean; // public: Stealth Mode is announced
+  stealthUntil: number | null; // public: last round of an active Stealth Mode
+  sabotageUsed: boolean; // only the Crooked Cop themself and the facilitator see this
+  jammed: boolean; // only the Crooked Cop and the facilitator see who is jammed
 }
 
 export interface View {

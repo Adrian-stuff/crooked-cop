@@ -4,7 +4,7 @@
 // It runs the same in the Node dev server and in a Supabase edge function.
 
 import {
-  ADJ, EXIT_STATION, EXPRESS_STOPS, STATIONS, distance, exitsFor, expressStep, isAdjacent, lineName, lineStations, linesAt, searchArea,
+  ADJ, EXIT_STATION, EXPRESS_STOPS, LINES, STATIONS, distance, exitsFor, expressStep, isAdjacent, lineName, lineStations, linesAt, searchArea,
   stationLabel,
 } from './map.ts';
 import {
@@ -23,6 +23,11 @@ export const escapeTarget = (s: Settings) => Math.ceil(s.artifactCount / 2);
 
 // Officers can play their Police Ultimate once the Heisters have taken this many Artifacts.
 export const ULTIMATE_UNLOCK = 3;
+
+// The Heister's Stealth Mode needs them to be the only Heister still in play.
+export const STEALTH_ROUNDS = 2; // the round it's played and the next one
+// The Crooked Cop's Sabotage jams an officer's Searches and scans for this round and the next.
+export const SABOTAGE_ROUNDS = 2;
 
 // An officer who is AFK or offline gets this long for their Police turn, so they don't hold up the table.
 export const AFK_TURN_SECONDS = 15;
@@ -123,6 +128,15 @@ const activeHeisters = (g: GameState) => g.players.filter((p) => p.role === 'hei
 const activePolice = (g: GameState) =>
   g.players.filter((p) => (p.role === 'police' || p.role === 'traitor') && p.status === 'active');
 const isPolice = (p: Player) => p.role === 'police' || p.role === 'traitor';
+// A Heister in Stealth Mode doesn't show up in Searches, scans or clues (arrests still land).
+const stealthed = (g: GameState, h: Player) => (h.stealthUntil ?? 0) >= g.round;
+const visibleHeisters = (g: GameState) => activeHeisters(g).filter((h) => !stealthed(g, h));
+// A sabotaged officer's Searches and scans come back with no Heisters in them.
+const jammed = (g: GameState, p: Player) => (p.jammedUntil ?? 0) >= g.round;
+
+function visit(g: GameState, h: Player, station: string) {
+  g.visits.push({ heister: h.id, station, round: g.round, ...(stealthed(g, h) ? { hidden: true } : {}) });
+}
 
 // Station names like "Taft Ave." would otherwise end sentences with "..".
 const tidy = (text: string) => text.replace(/\.\.(?=\s|$)/g, '.');
@@ -192,7 +206,7 @@ function startGame(g: GameState, t: number) {
     Object.assign(p, {
       status: 'active', station: null, carried: 0, done: false, moved: false, acted: null,
       envelopeGiven: false, skipPoliceRound: undefined, noArrestRound: undefined, cleared: false, expressRound: undefined, afk: false,
-      ultimateUsed: false,
+      ultimateUsed: false, stealthUsed: false, stealthUntil: undefined, sabotageUsed: false, jammedUntil: undefined,
     });
   }
   const custom = g.settings.customExits?.filter((id) => ADJ[id]);
@@ -219,7 +233,7 @@ function placeAt(g: GameState, p: Player, station: string) {
   p.station = station;
   if (p.role === 'heister') {
     g.trails[p.id] = [{ round: g.round, station }];
-    g.visits.push({ heister: p.id, station, round: g.round });
+    visit(g, p, station);
     collect(g, p, station);
   }
 }
@@ -284,7 +298,7 @@ function endHeisterPhase(g: GameState, t: number) {
   // Once unlocked the Ultimate stays available, even if an arrest later drops Artifacts back on the map.
   if (!g.ultimateUnlocked && taken >= ULTIMATE_UNLOCK) {
     g.ultimateUnlocked = true;
-    log(g, 'announce', 'Police Ultimate unlocked: once per game, each officer may scan one line for Heisters and still take their action.');
+    log(g, 'announce', 'Police Ultimate unlocked: once per game, each officer may scan one line, narrowing any Heister on it to 3 stations, and still take their action.');
     log(g, 'announce', "Pursuit: the officers' Express no longer needs to recharge.");
   }
   g.phase = 'police';
@@ -397,8 +411,35 @@ function checkPoliceWin(g: GameState) {
 
 // ---------- Clues ----------
 
+// The Police Ultimate doesn't pinpoint a Heister: it names 3 stations in a row on the line, one of
+// them the Heister's, with the Heister at a random spot in the stretch. Stretches follow the line's
+// own track, so they run round loops and onto branches.
+export const ZONE_SIZE = 3;
+function scanZone(g: GameState, lineId: string, station: string): string[] {
+  const next: Record<string, Set<string>> = {};
+  for (const seg of LINES.find((l) => l.id === lineId)?.segments ?? []) {
+    const stops = seg.filter((p): p is string => typeof p === 'string');
+    for (let i = 1; i < stops.length; i++) {
+      if (stops[i - 1] === stops[i]) continue;
+      (next[stops[i - 1]] ??= new Set()).add(stops[i]);
+      (next[stops[i]] ??= new Set()).add(stops[i - 1]);
+    }
+  }
+  // Every run of 3 stations in a row along the line that takes in the Heister's station.
+  const windows: string[][] = [];
+  const grow = (path: string[]) => {
+    if (path.length === ZONE_SIZE) {
+      if (path.includes(station)) windows.push(path);
+      return;
+    }
+    for (const n of next[path[path.length - 1]] ?? []) if (!path.includes(n)) grow([...path, n]);
+  };
+  for (const s of Object.keys(next)) grow([s]);
+  return windows.length ? pick(g, windows) : [station];
+}
+
 function fieldClue(g: GameState): string {
-  const hs = activeHeisters(g);
+  const hs = visibleHeisters(g);
   if (hs.length === 0) return 'The radio is quiet.';
   const h = pick(g, hs);
   const here = h.station!;
@@ -414,7 +455,7 @@ function fieldClue(g: GameState): string {
     },
     () => `${heisterTag(h)} is carrying ${plural(h.carried, 'Artifact')}.`,
     () => {
-      const recent = g.visits.filter((v) => v.round >= g.round - 2 && v.round > 0);
+      const recent = g.visits.filter((v) => v.round >= g.round - 2 && v.round > 0 && !v.hidden);
       return recent.length ? `A Heister passed through ${stationLabel(pick(g, recent).station)} in the last 2 rounds.` : null;
     },
   ];
@@ -426,14 +467,16 @@ function fieldClue(g: GameState): string {
 }
 
 // A Search sweeps an area (see searchArea), reporting on every station in it.
-function searchResult(g: GameState, station: string): SearchResult {
+// A jammed Search (Sabotage) misses every Heister; Artifacts still show truthfully.
+function searchResult(g: GameState, station: string, jam: boolean): SearchResult {
   const area = searchArea(station);
+  const seen = jam ? [] : visibleHeisters(g);
   return {
     station,
     area,
-    heistersNow: area.filter((s) => activeHeisters(g).some((h) => h.station === s)),
-    tracks: area
-      .map((s) => g.visits.filter((v) => v.station === s && v.round >= g.round - 2 && v.round > 0).sort((x, y) => y.round - x.round)[0])
+    heistersNow: area.filter((s) => seen.some((h) => h.station === s)),
+    tracks: jam ? [] : area
+      .map((s) => g.visits.filter((v) => v.station === s && v.round >= g.round - 2 && v.round > 0 && !v.hidden).sort((x, y) => y.round - x.round)[0])
       .filter(Boolean)
       .map((v) => ({ station: v.station, ago: g.round - v.round })),
     hidden: area.filter((s) => (g.artifacts[s] ?? 0) > 0),
@@ -560,7 +603,7 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
         if (action.express) me.expressRound = g.round;
         const stops = action.express ? [action.path[action.path.length - 1]] : action.path;
         for (const st of stops) {
-          g.visits.push({ heister: me.id, station: st, round: g.round });
+          visit(g, me, st);
           collect(g, me, st);
         }
         me.station = action.path[action.path.length - 1];
@@ -604,7 +647,7 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
         fail(g.settings.searchRange === 0 ? 'You can only search your own station.' : `You can only search within ${plural(g.settings.searchRange, 'stop')} of you.`);
       }
       me.acted = 'search';
-      const result = searchResult(g, action.station);
+      const result = searchResult(g, action.station, jammed(g, me));
       envelope(g, me.id, 'search', `Search: ${stationLabel(action.station)}`, searchLines(result), { search: result });
       // Searching takes the officer to the station they searched.
       const went = me.station !== action.station;
@@ -663,20 +706,53 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
       if (!linesAt(me.station!).includes(action.line)) fail('Pick a line that runs through your station.');
       me.ultimateUsed = true;
       const stations = lineStations(action.line);
-      const heistersNow = [...new Set(activeHeisters(g).filter((h) => stations.includes(h.station!)).map((h) => h.station!))];
+      const seen = jammed(g, me) ? [] : visibleHeisters(g);
+      const heistersNow = [...new Set(seen.filter((h) => stations.includes(h.station!)).map((h) => h.station!))];
       const found = heistersNow.length > 0;
+      // Only a stretch of 3 stations per Heister, so the officer still has to guess which one.
+      const zones = heistersNow.map((s) => scanZone(g, action.line, s));
       const line = lineName(action.line);
       const lines = found
         ? [
             `At least one Heister is on the ${line} line right now.`,
-            `Heister spotted at ${heistersNow.map(stationLabel).join(', ')}.`,
+            ...zones.map((z) => `A Heister is at one of ${z.map(stationLabel).join(', ')}.`),
           ]
         : [`No Heister is on the ${line} line right now.`];
       envelope(g, me.id, 'ultimate', `Ultimate: ${line} line`, lines,
-        { scan: { line: action.line, from: me.station!, stations, found, heistersNow } });
+        { scan: { line: action.line, from: me.station!, stations, found, zones } });
       g.roundActions.push({ by: me.id, kind: 'ultimate', station: me.station!, line: action.line });
       log(g, 'info', `${me.name} played the Police Ultimate on the ${line} line.`);
       // A free action: the turn carries on, so the officer can act on what the scan found.
+      break;
+    }
+
+    case 'stealth': {
+      if (g.phase !== 'heister' || me.role !== 'heister') fail('Heisters go into Stealth Mode during the Heister Phase.');
+      if (me.status !== 'active' || me.done) fail('You already moved this round.');
+      if (me.stealthUsed) fail('You already used Stealth Mode this game.');
+      if (activeHeisters(g).length !== 1) fail('Stealth Mode only works when you are the last Heister in play.');
+      me.stealthUsed = true;
+      me.stealthUntil = g.round + STEALTH_ROUNDS - 1;
+      // Announced, so officers know their Searches can't be trusted for a while; the Heister still moves this turn.
+      log(g, 'announce', `${heisterTag(me)} went into Stealth Mode. Searches, scans and clues can't see them until the end of round ${me.stealthUntil}.`);
+      break;
+    }
+
+    case 'sabotage': {
+      if (g.phase !== 'police' || me.role !== 'traitor') fail('Only the Crooked Cop can sabotage, on their Police turn.');
+      if (me.status !== 'active' || me.done) fail('Your turn is over.');
+      if (g.policeTurn !== me.id) fail('Wait for your turn.');
+      if (!g.ultimateUnlocked) fail(`Sabotage unlocks once the Heisters have taken ${ULTIMATE_UNLOCK} Artifacts.`);
+      const target = g.players.find((p) => p.id === action.target);
+      if (!target || target.id === me.id || !isPolice(target) || target.status !== 'active') fail('Pick another active officer to sabotage.');
+      if (me.sabotageUsed) fail('You already sabotaged this game.');
+      me.sabotageUsed = true;
+      target!.jammedUntil = g.round + SABOTAGE_ROUNDS - 1;
+      // Secret: no log line and no round action, only a note to the Crooked Cop.
+      envelope(g, me.id, 'sabotage', `Sabotage: ${target!.name}`, [
+        `${target!.name}'s radio is jammed until the end of round ${target!.jammedUntil}.`,
+        'Their Searches and Ultimate scans will show no Heisters.',
+      ]);
       break;
     }
 
@@ -686,7 +762,7 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
         if (me.done) fail('You already moved this round.');
         me.done = true;
         g.trails[me.id].push({ round: g.round, station: me.station! });
-        g.visits.push({ heister: me.id, station: me.station!, round: g.round });
+        visit(g, me, me.station!);
         if (activeHeisters(g).every((p) => p.done)) endHeisterPhase(g, t);
       } else if (g.phase === 'police') {
         if (!isPolice(me) || me.status !== 'active') fail('It is the Police Phase.');
@@ -756,6 +832,7 @@ function resolveAccusation(g: GameState, t: number, timedOut: boolean) {
     if (target.role !== 'traitor') target.cleared = true;
     if (target.role === 'traitor') {
       target.status = 'exposed';
+      for (const p of g.players) p.jammedUntil = undefined; // their sabotage dies with them
       log(g, 'expose', `Vote passed ${yes}-${no}. ${target.name} WAS the Crooked Cop and is removed from the game.`);
     } else {
       target.noArrestRound = g.round + 1;
@@ -781,7 +858,7 @@ export function advanceTime(g: GameState, t: number) {
             markAfk(g, h);
             h.done = true;
             g.trails[h.id].push({ round: g.round, station: h.station! });
-            g.visits.push({ heister: h.id, station: h.station!, round: g.round });
+            visit(g, h, h.station!);
           }
         }
         endHeisterPhase(g, t);
@@ -853,6 +930,10 @@ export function viewFor(state: GameState, viewerId: string, t: number): View {
       cleared: !!p.cleared,
       afk: !!p.afk,
       ultimateUsed: !!p.ultimateUsed,
+      stealthUsed: !!p.stealthUsed,
+      stealthUntil: p.stealthUntil !== undefined && p.stealthUntil >= g.round ? p.stealthUntil : null,
+      sabotageUsed: !!p.sabotageUsed && (godView || p.id === viewerId),
+      jammed: (p.jammedUntil ?? 0) >= g.round && (godView || myRole === 'traitor'),
       // Officers' moves are public, so anyone may see their recharge; a Heister's only their team.
       expressCooldown: p.expressRound === g.round - 1
         && (p.role === 'heister' ? godView || heisterTeam : isPolice(p) && !g.ultimateUnlocked),

@@ -21,6 +21,10 @@ function makePlayer(partial: Partial<PublicPlayer> & { id: string; name: string;
     cleared: false,
     expressCooldown: false,
     ultimateUsed: false,
+    stealthUsed: false,
+    stealthUntil: null,
+    sabotageUsed: false,
+    jammed: false,
     ...partial,
   };
 }

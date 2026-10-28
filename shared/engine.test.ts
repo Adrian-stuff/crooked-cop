@@ -407,9 +407,18 @@ describe('police ultimate', () => {
 
     // No scanning after your action, and scan-then-pass records only the scan.
     g = act(g, cops[1].id, { type: 'ultimate', line: 'purple' });
-    expect(g.envelopes.at(-1)!.scan!.found).toBe(true);
-    expect(g.envelopes.at(-1)!.scan!.heistersNow).toEqual(['recto']);
-    expect(g.envelopes.at(-1)!.lines).toContain('Heister spotted at Recto.');
+    const scan = g.envelopes.at(-1)!.scan!;
+    expect(scan.found).toBe(true);
+    // Not the exact station: 3 neighbouring Purple stations, one of them Recto.
+    expect(scan).not.toHaveProperty('heistersNow');
+    expect(scan.zones).toHaveLength(1);
+    const [zone] = scan.zones!;
+    expect(zone).toHaveLength(3);
+    expect(zone).toContain('recto');
+    const purple = ['pureza', 'legarda', 'senate_deped', 'recto', 'lawton', 'tutuban', 'divisoria'];
+    const runs = [1, 2, 3].map((i) => purple.slice(i, i + 3).sort().join());
+    expect(runs).toContain([...zone].sort().join());
+    expect(g.envelopes.at(-1)!.lines.join(' ')).not.toMatch(/spotted at/);
     g = act(g, cops[1].id, { type: 'endTurn' });
     expect(g.roundActions.filter((a) => a.by === cops[1].id).map((a) => a.kind)).toEqual(['ultimate']);
 
@@ -418,6 +427,152 @@ describe('police ultimate', () => {
     while (g.phase !== 'police' || g.round !== 2) g = act(g, cops[0].id, { type: 'tick' }, (t += 61_000));
     while (g.policeTurn !== cops[0].id) g = act(g, g.policeTurn!, { type: 'endTurn' }, t);
     expect(() => act(g, cops[0].id, { type: 'ultimate', line: 'purple' }, t)).toThrow(/already played/);
+  });
+});
+
+describe('police ultimate zones', () => {
+  // A lone Heister at `at`; the first officer scans `line` from `from`.
+  function scan(line: string, at: string, from: string, seed: number) {
+    let g = setup(4, seed);
+    const [h] = byRole(g, 'heister');
+    const cops = g.players.filter((p) => p.role === 'police' || p.role === 'traitor');
+    g = placeAllDirect(g, { [h.id]: at, ...Object.fromEntries(cops.map((c) => [c.id, from])) });
+    g.players.find((p) => p.id === h.id)!.carried = 3;
+    g = act(g, h.id, { type: 'endTurn' });
+    g = act(g, g.policeTurn!, { type: 'ultimate', line });
+    return g.envelopes.at(-1)!.scan!.zones![0];
+  }
+  const linked = (a: string, b: string) => ADJ[a].some((n) => n.to === b);
+
+  it('always names 3 neighbouring stations, including on loops and branches', () => {
+    const cases: [string, string, string][] = [
+      ['purple', 'common_terminal', 'lawton'], // where the Purple loop closes
+      ['lime', 'sucat', 'guadalupe'], // end of the 2-station Lime branch
+      ['pink', 'regalado', 'malolos'], // middle of a short Pink branch
+      ['red', 'clark_airport', 'malolos'], // end of a line
+    ];
+    for (const [line, at, from] of cases) {
+      const starts = new Set<string>();
+      for (let seed = 1; seed <= 12; seed++) {
+        const zone = scan(line, at, from, seed);
+        expect(zone).toHaveLength(3);
+        expect(new Set(zone).size).toBe(3);
+        expect(zone).toContain(at);
+        expect(linked(zone[0], zone[1]) && linked(zone[1], zone[2])).toBe(true);
+        starts.add(zone.join());
+      }
+      if (at !== 'clark_airport') expect(starts.size).toBeGreaterThan(1); // the Heister's spot in the stretch varies
+    }
+  });
+});
+
+describe('heister stealth mode', () => {
+  // One Heister on Recto (Purple); officers on Lawton (one stop away, and on the Purple line).
+  function ready(n = 4) {
+    let g = setup(n);
+    const hs = byRole(g, 'heister');
+    const cops = g.players.filter((p) => p.role === 'police' || p.role === 'traitor');
+    const where: Record<string, string> = { [hs[0].id]: 'recto' };
+    if (hs[1]) where[hs[1].id] = 'tutuban';
+    for (const c of cops) where[c.id] = 'lawton';
+    g = placeAllDirect(g, where);
+    return { g, hs, cops };
+  }
+
+  it('needs the Heister to be the last one in play', () => {
+    const { g, hs } = ready(8);
+    expect(hs).toHaveLength(2);
+    expect(() => act(g, hs[0].id, { type: 'stealth' })).toThrow(/last Heister/);
+  });
+
+  it('hides the Heister from Searches, scans and tracks for two rounds, once per game', () => {
+    const { g: start, hs: [h], cops } = ready();
+    let g = act(start, h.id, { type: 'stealth' });
+    expect(g.players.find((p) => p.id === h.id)!).toMatchObject({ stealthUsed: true, stealthUntil: 2, done: false });
+    expect(g.log.at(-1)!.kind).toBe('announce');
+    expect(viewFor(g, cops[0].id, T0).players.find((p) => p.id === h.id)!.stealthUntil).toBe(2);
+    expect(() => act(g, h.id, { type: 'stealth' })).toThrow(/already used/);
+
+    g.players.find((p) => p.id === h.id)!.carried = 3; // so the Ultimate unlocks
+    g = act(g, h.id, { type: 'move', path: ['lawton', 'taytay'], express: false });
+    expect(g.phase).toBe('police');
+
+    // Searching the Heister's own station (which they just passed through) and scanning their line find nothing.
+    g = act(g, g.policeTurn!, { type: 'search', station: 'taytay' });
+    const r = g.envelopes.at(-1)!.search!;
+    expect(r.heistersNow).toEqual([]);
+    expect(r.tracks).toEqual([]);
+    const scanner = g.policeTurn!;
+    g = act(g, scanner, { type: 'ultimate', line: 'orange' });
+    expect(g.envelopes.at(-1)!.scan!.found).toBe(false);
+
+    // An arrest still lands.
+    g = act(g, scanner, { type: 'arrest', station: 'taytay' });
+    expect(g.phase).toBe('ended');
+  });
+
+  it('wears off after the next round', () => {
+    const { g: start, hs: [h], cops } = ready();
+    let g = act(start, h.id, { type: 'stealth' });
+    g = act(g, h.id, { type: 'endTurn' });
+    let t = T0;
+    while (g.round < 3 || g.phase !== 'police') g = act(g, cops[0].id, { type: 'tick' }, (t += 61_000));
+    expect(viewFor(g, cops[0].id, t).players.find((p) => p.id === h.id)!.stealthUntil).toBeNull();
+    const cop = g.policeTurn!;
+    g = act(g, cop, { type: 'search', station: 'recto' }, t);
+    expect(g.envelopes.at(-1)!.search!.heistersNow).toEqual(['recto']);
+  });
+});
+
+describe('crooked cop sabotage', () => {
+  function ready(carried: number) {
+    let g = setup(5);
+    const [h] = byRole(g, 'heister');
+    const cops = g.players.filter((p) => p.role === 'police' || p.role === 'traitor');
+    const where: Record<string, string> = { [h.id]: 'recto' };
+    for (const c of cops) where[c.id] = 'lawton';
+    g = placeAllDirect(g, where);
+    g.players.find((p) => p.id === h.id)!.carried = carried;
+    g = act(g, h.id, { type: 'endTurn' });
+    const traitor = cops.find((c) => c.role === 'traitor')!;
+    const honest = cops.filter((c) => c.role === 'police');
+    // Hand turns on until the Crooked Cop is up.
+    while (g.policeTurn !== traitor.id) g = act(g, g.policeTurn!, { type: 'endTurn' });
+    return { g, traitor, honest, h };
+  }
+
+  it('stays locked until the Heisters have taken 3 Artifacts, and is the Crooked Cop\'s alone', () => {
+    const { g, traitor, honest } = ready(2);
+    expect(() => act(g, traitor.id, { type: 'sabotage', target: honest.at(-1)!.id })).toThrow(/unlocks once/);
+    expect(() => act(g, honest[0].id, { type: 'sabotage', target: traitor.id })).toThrow(/Only the Crooked Cop/);
+  });
+
+  it('secretly jams one officer\'s Searches and scans', () => {
+    const { g: start, traitor, honest } = ready(3);
+    const target = honest.at(-1)!;
+    const logLen = start.log.length;
+    let g = act(start, traitor.id, { type: 'sabotage', target: target.id });
+    expect(g.log.length).toBe(logLen); // nothing public
+    expect(g.roundActions.some((a) => a.by === traitor.id)).toBe(false);
+    expect(g.envelopes.at(-1)).toMatchObject({ to: traitor.id, kind: 'sabotage' });
+    expect(g.policeTurn).toBe(traitor.id); // free action
+    expect(viewFor(g, target.id, T0).players.find((p) => p.id === target.id)!.jammed).toBe(false);
+    expect(viewFor(g, traitor.id, T0).players.find((p) => p.id === target.id)!.jammed).toBe(true);
+    expect(() => act(g, traitor.id, { type: 'sabotage', target: target.id })).toThrow(/already sabotaged/);
+    expect(() => act(g, traitor.id, { type: 'sabotage', target: traitor.id })).toThrow(/another active officer/);
+
+    // The target may already have gone this round; the jam lasts into the next.
+    g = act(g, traitor.id, { type: 'endTurn' });
+    let t = T0;
+    while (g.policeTurn !== target.id) {
+      g = g.policeTurn ? act(g, g.policeTurn, { type: 'endTurn' }, t) : act(g, target.id, { type: 'tick' }, (t += 61_000));
+    }
+    g = act(g, target.id, { type: 'ultimate', line: 'purple' }, t);
+    expect(g.envelopes.at(-1)!.scan!.found).toBe(false);
+    g = act(g, target.id, { type: 'search', station: 'recto' }, t);
+    const r = g.envelopes.at(-1)!.search!;
+    expect(r.heistersNow).toEqual([]);
+    expect(r.tracks).toEqual([]);
   });
 });
 

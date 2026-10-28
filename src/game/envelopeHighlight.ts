@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react';
-import type { View } from '../../shared/types';
+import type { ScanResult, View } from '../../shared/types';
+
+// A scan that found someone lights up the 3-station stretches it named; otherwise the whole line.
+export const scanArea = (r: ScanResult) => (r.found && r.zones?.length ? [...new Set(r.zones.flat())] : r.stations);
 
 // Keep the area your Search swept lit up for the rest of the round.
 // Hovering or pinning an envelope's area chip lights that sweep up instead.
@@ -8,7 +11,7 @@ export function useEnvelopeHighlight(view: View) {
   const [pinned, setPinned] = useState<string | null>(null);
   const highlight = hover ?? pinned;
   const shown = view.envelopes.find((e) => e.id === highlight);
-  const areaOf = (e?: View['envelopes'][number]) => e?.search?.area ?? e?.scan?.stations;
+  const areaOf = (e?: View['envelopes'][number]) => e?.search?.area ?? (e?.scan ? scanArea(e.scan) : undefined);
   const swept = areaOf(shown)
     ?? areaOf(view.envelopes.filter((e) => (e.kind === 'search' || e.kind === 'ultimate') && (view.godView || e.to === view.me) && e.round === view.round).at(-1));
 

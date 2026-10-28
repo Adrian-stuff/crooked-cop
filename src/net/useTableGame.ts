@@ -213,7 +213,7 @@ export function useTableGame() {
       const s = latest.current;
       if (!s) return 'No game is running.';
       if (s.state.phase !== 'police' || s.state.policeTurn !== as) return "It isn't this officer's turn any more.";
-      if (!['move', 'search', 'arrest', 'ultimate', 'endTurn'].includes(action.type)) return 'The facilitator records that.';
+      if (!['move', 'search', 'arrest', 'ultimate', 'sabotage', 'endTurn'].includes(action.type)) return 'The facilitator records that.';
       try {
         applyAction(s.state, as, action, Date.now()); // check it first, so the error goes back to the device
       } catch (e) {

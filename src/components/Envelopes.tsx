@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { LINES, lineName, stationLabel } from '../../shared/map';
 import type { Envelope, ScanResult, SearchResult, TipResult, View } from '../../shared/types';
+import { scanArea } from '../game/envelopeHighlight';
 import { SPECTATOR_IDENTITY, type Identity } from '../game/identity';
 import { TokenIcon } from './Token';
 
@@ -56,6 +57,12 @@ function ScanRows({ r }: { r: ScanResult }) {
             </li>
           )
         : <li className="clear"><i aria-hidden="true">✓</i><span>No Heister on the {lineName(r.line)} line right now</span></li>}
+      {r.zones?.map((z, i) => (
+        <li key={i} className="danger">
+          <i aria-hidden="true">?</i>
+          <span>One of <strong>{names(z)}</strong>. Guess which</span>
+        </li>
+      ))}
       <li><i aria-hidden="true">·</i><span>Scanned from {stationLabel(r.from)} across {r.stations.length} stations</span></li>
     </ul>
   );
@@ -84,7 +91,7 @@ function Summary({ e, ids }: { e: Envelope; ids: Props['ids'] }) {
     return <><span className="env-what">{stationLabel(e.search.station)}</span><span className={`env-chip ${o.tone}`}>{o.text}</span></>;
   }
   if (e.scan) {
-    const at = e.scan.heistersNow?.length ? names(e.scan.heistersNow) : null;
+    const at = e.scan.heistersNow?.length ? names(e.scan.heistersNow) : null; // old saves only
     return (
       <>
         <span className="env-what"><i className="line-swatch" style={{ background: LINES.find((l) => l.id === e.scan!.line)?.color }} />{lineName(e.scan.line)} line</span>
@@ -115,9 +122,10 @@ export function Envelopes({ view, ids, highlight, onHighlight, fresh }: Props) {
   if (view.phase === 'lobby') return null;
 
   const all = [...view.envelopes].reverse();
-  const hasTips = all.some((e) => e.kind === 'traitor');
-  // Ultimate scans sit with the searches.
-  const list = all.filter((e) => filter === 'all' || e.kind === filter || (filter === 'search' && e.kind === 'ultimate'));
+  const hasTips = all.some((e) => e.kind === 'traitor' || e.kind === 'sabotage');
+  // Ultimate scans sit with the searches, Sabotage notes with the tip-offs.
+  const list = all.filter((e) => filter === 'all' || e.kind === filter || (filter === 'search' && e.kind === 'ultimate')
+    || (filter === 'traitor' && e.kind === 'sabotage'));
   const to = (e: Envelope) => (view.godView ? view.players.find((p) => p.id === e.to)?.name : null);
 
   return (
@@ -153,11 +161,11 @@ export function Envelopes({ view, ids, highlight, onHighlight, fresh }: Props) {
                   <span className="env-caret" aria-hidden="true" />
                 </button>
                 {isOpen && (e.search || e.scan) && (
-                  <button className={`env-area ${highlight === e.id ? 'on' : ''}`} title={e.scan ? 'Show the scanned line on the map' : 'Show the swept stations on the map'}
+                  <button className={`env-area ${highlight === e.id ? 'on' : ''}`} title={e.scan ? (e.scan.found ? 'Show where the Heister could be' : 'Show the scanned line on the map') : 'Show the swept stations on the map'}
                     onMouseEnter={() => onHighlight(e.id)} onMouseLeave={() => onHighlight(null)}
                     onFocus={() => onHighlight(e.id)} onBlur={() => onHighlight(null)}
                     onClick={() => onHighlight(e.id, true)}>
-                    {(e.search?.area ?? e.scan!.stations).length} stations
+                    {(e.search?.area ?? scanArea(e.scan!)).length} stations
                   </button>
                 )}
               </header>

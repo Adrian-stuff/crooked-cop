@@ -90,12 +90,18 @@ function play(v: View, send: (m: ClientMsg) => void) {
     if (!me.station) act({ type: 'chooseStart', station: rnd(STATIONS.filter((s) => !v.exits.includes(s.id))).id });
     else act({ type: 'ready' });
   } else if (v.phase === 'heister' && v.myRole === 'heister' && !me.done && me.station) {
+    const solo = v.players.filter((p) => p.role === 'heister' && p.status === 'active').length === 1;
+    if (solo && !me.stealthUsed && Math.random() < 0.2) act({ type: 'stealth' });
     const step1 = rnd(neighbours(me.station));
     const step2 = rnd(neighbours(step1).filter((s) => s !== me.station));
     act({ type: 'move', path: Math.random() < 0.5 && step2 ? [step1, step2] : [step1], express: false });
   } else if (v.phase === 'police' && officer && !me.done && me.station && v.policeTurn === me.id) {
     // One action per turn: sometimes arrest, otherwise search a neighbour (which moves there) or just move.
     const near = neighbours(me.station).filter((s) => !v.exitMustClear.includes(s));
+    const marks = v.players.filter((p) => p.id !== me.id && (p.role === 'police' || p.role === 'traitor') && p.status === 'active');
+    if (v.myRole === 'traitor' && v.ultimateUnlocked && !me.sabotageUsed && marks.length && Math.random() < 0.3) {
+      act({ type: 'sabotage', target: rnd(marks).id });
+    }
     if (v.ultimateUnlocked && !me.ultimateUsed && Math.random() < 0.2) {
       act({ type: 'ultimate', line: rnd(linesAt(me.station)) });
     } else if (Math.random() < 0.15 && !me.cannotArrest && v.arrestsLeft > 0) {

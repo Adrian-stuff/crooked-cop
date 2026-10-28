@@ -110,7 +110,10 @@ export function ActionDock({ view, mode, path, setMode, setPath, act, facilitato
   const [accuseTarget, setAccuseTarget] = useState('');
   const [picking, setPicking] = useState(false);
   const [scanning, setScanning] = useState(false);
-  useEffect(() => setScanning(false), [view.phase, view.round]);
+  const [stealthing, setStealthing] = useState(false);
+  const [sabotaging, setSabotaging] = useState(false);
+  const [sabotageTarget, setSabotageTarget] = useState('');
+  useEffect(() => { setScanning(false); setStealthing(false); setSabotaging(false); setSabotageTarget(''); }, [view.phase, view.round]);
   if (!me) return null;
   const officer = isOfficer(view.myRole);
   const active = me.status === 'active';
@@ -200,12 +203,32 @@ export function ActionDock({ view, mode, path, setMode, setPath, act, facilitato
       </span>
     );
     if (me.done) return <Dock title={`${whose} move, ${me.label}`} sub="Move locked in. Waiting for your partner…">{carry}</Dock>;
+    // Stealth Mode: the last Heister in play can go dark once per game, then still move.
+    const solo = view.players.filter((p) => p.role === 'heister' && p.status === 'active').length === 1;
+    const hidden = me.stealthUntil !== null;
+    if (stealthing && solo && !me.stealthUsed) {
+      return (
+        <Dock tone="deciding" title="Stealth Mode"
+          sub={`For this round and the next, Searches, Ultimate scans and field clues can't see you, and you leave no tracks. Arrests still work. Everyone is told you went dark. It's a free action: you still move after.`}>
+          <button className="btn ghost" onClick={() => setStealthing(false)}>Cancel</button>
+          <button className="btn primary" onClick={() => { setStealthing(false); act({ type: 'stealth' }); }}>Go dark</button>
+        </Dock>
+      );
+    }
+    const stealthStep = hidden ? `On to R${me.stealthUntil}` : me.stealthUsed ? 'Used' : solo ? 'Free action' : 'Last Heister only';
+    const stealthTitle = hidden ? `You're hidden from Searches, scans and clues until the end of round ${me.stealthUntil}.`
+      : me.stealthUsed ? 'You already used Stealth Mode this game.'
+        : solo ? 'Once per game: vanish from Searches, scans and clues for this round and the next, then still move'
+          : 'Unlocks once you are the only Heister still in play';
     return (
-      <Dock title={`${whose} move, ${me.label}`} hint={hint ?? 'Click any station for options'}
+      <Dock tone={hidden ? 'stealth' : ''} title={`${whose} move, ${me.label}`}
+        hint={hint ?? (hidden ? `Stealth Mode: hidden until the end of round ${me.stealthUntil}` : 'Click any station for options')}
         sub="Stops on an Artifact pick it up. Express only collects at its last stop.">
         {routing ? route : (
           <>
             {moveCards()}
+            <Card step={stealthStep} label="Stealth" kind="ultimate stealth" title={stealthTitle}
+              disabled={!solo || me.stealthUsed} onClick={() => { setMode(null); setPath([]); setStealthing(true); }} />
             <button className="btn ghost" onClick={() => act({ type: 'endTurn' })}>Stay put</button>
           </>
         )}
@@ -224,14 +247,16 @@ export function ActionDock({ view, mode, path, setMode, setPath, act, facilitato
       return <Dock title="Police Phase" sub={<>Officers go one at a time. {up ? <><strong>{up.name}</strong> is taking their turn.</> : ''} You're up soon.</>} />;
     }
     const noArrest = me.cannotArrest || view.arrestsLeft <= 0;
+    const seats = seatIdentities(view.players);
+    const face = (p: PublicPlayer) => <TokenIcon role={p.role} identity={seats[p.id] ?? SPECTATOR_IDENTITY} text={tokenText(p)} size={28} />;
     // The Police Ultimate: scan one line through your station for Heisters, once per game.
     if (scanning && view.ultimateUnlocked && !me.ultimateUsed) {
       const lines = linesAt(me.station!);
       return (
         <Dock tone="deciding" title="Police Ultimate"
           sub={lines.length > 1
-            ? `${stationLabel(me.station!)} is an interchange. Pick which line to scan for Heisters. It's a free action: you still take your turn after.`
-            : "Scan your whole line for Heisters. It's a free action: you still take your turn after."}>
+            ? `${stationLabel(me.station!)} is an interchange. Pick which line to scan. A Heister on it shows up as 3 stations in a row, and you guess which. It's a free action: you still take your turn after.`
+            : "Scan your whole line. A Heister on it shows up as 3 stations in a row, and you guess which. It's a free action: you still take your turn after."}>
           {lines.map((l) => {
             const line = LINES.find((x) => x.id === l)!;
             return (
@@ -246,10 +271,39 @@ export function ActionDock({ view, mode, path, setMode, setPath, act, facilitato
         </Dock>
       );
     }
+    // Sabotage: the Crooked Cop secretly jams one officer's Searches and scans.
+    const traitor = view.myRole === 'traitor';
+    const others = view.players.filter((p) => isOfficer(p.role) && p.status === 'active' && p.id !== me.id);
+    if (sabotaging && traitor && view.ultimateUnlocked && !me.sabotageUsed) {
+      const chosen = others.find((p) => p.id === sabotageTarget);
+      return (
+        <Dock tone="deciding" title="Sabotage"
+          sub="Secretly jam one officer's radio. Until the end of next round their Searches and Ultimate scans show no Heisters. Nobody is told. It's a free action: you still take your turn after.">
+          <div className="suspects">
+            {others.map((p) => (
+              <button key={p.id} className={`suspect ${sabotageTarget === p.id ? 'selected' : ''}`} aria-pressed={sabotageTarget === p.id}
+                onClick={() => setSabotageTarget(p.id)}>
+                {face(p)}<span>{p.name}</span>
+              </button>
+            ))}
+          </div>
+          <button className="btn ghost" onClick={() => { setSabotaging(false); setSabotageTarget(''); }}>Cancel</button>
+          <button className="btn arrest" disabled={!chosen}
+            onClick={() => { act({ type: 'sabotage', target: sabotageTarget }); setSabotaging(false); setSabotageTarget(''); }}>
+            {chosen ? `Jam ${chosen.name}` : 'Pick an officer'}
+          </button>
+        </Dock>
+      );
+    }
+    const sabotageStep = me.sabotageUsed ? 'Used'
+      : view.ultimateUnlocked ? 'Secret' : `${Math.min(view.announcedTaken, ULTIMATE_UNLOCK)}/${ULTIMATE_UNLOCK} taken`;
+    const sabotageTitle = me.sabotageUsed ? 'You already sabotaged this game.'
+      : view.ultimateUnlocked ? "Once per game, in secret: jam an officer's Searches and scans until the end of next round, then still take your action"
+        : `Unlocks once the Heisters have taken ${ULTIMATE_UNLOCK} Artifacts`;
     const ultimateStep = me.ultimateUsed ? 'Used'
       : view.ultimateUnlocked ? 'Free action' : `${Math.min(view.announcedTaken, ULTIMATE_UNLOCK)}/${ULTIMATE_UNLOCK} taken`;
     const ultimateTitle = me.ultimateUsed ? 'You already played your Ultimate this game.'
-      : view.ultimateUnlocked ? 'Once per game: check whether any Heister is on a line through your station, then still take your action'
+      : view.ultimateUnlocked ? 'Once per game: check whether any Heister is on a line through your station and narrow them to 3 stations, then still take your action'
         : `Unlocks once the Heisters have taken ${ULTIMATE_UNLOCK} Artifacts`;
     // The Ultimate is free, so after a scan the officer still has their action to take.
     const scannedNow = view.roundActions.some((a) => a.by === me.id && a.kind === 'ultimate');
@@ -269,6 +323,11 @@ export function ActionDock({ view, mode, path, setMode, setPath, act, facilitato
               disabled={noArrest} onClick={() => pick('arrest')} />
             <Card step={ultimateStep} label="Ultimate" kind="ultimate" title={ultimateTitle}
               disabled={!view.ultimateUnlocked || me.ultimateUsed} onClick={() => { setMode(null); setPath([]); setScanning(true); }} />
+            {traitor && (
+              <Card step={sabotageStep} label="Sabotage" kind="ultimate sabotage" title={sabotageTitle}
+                disabled={!view.ultimateUnlocked || me.sabotageUsed || !others.length}
+                onClick={() => { setMode(null); setPath([]); setSabotaging(true); }} />
+            )}
             <button className="btn ghost" onClick={() => { setMode(null); act({ type: 'endTurn' }); }}>Pass</button>
           </>
         )}
