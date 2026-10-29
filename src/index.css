@@ -805,13 +805,33 @@ input, select {
 .caught-arrest circle { fill: #1f5e32cc; stroke: #45c46b; stroke-width: 4; }
 .caught-arrest text { font: 700 20px var(--ui); fill: #e8ffe9; }
 .caught-arrest { animation: stamp 0.45s cubic-bezier(0.2, 1.3, 0.4, 1) backwards; }
-.station-ping .ping-wave { animation: ping-wave 1.2s cubic-bezier(0.1, 0.8, 0.3, 1) infinite; }
-.station-ping .ping-tag { font-family: var(--ui); font-size: 13px; font-weight: 700; fill: #fff; }
-.station-ping { animation: pawn-pop 0.35s cubic-bezier(0.2, 1.5, 0.4, 1) backwards; }
+.station-ping { animation: pawn-pop 0.4s cubic-bezier(0.2, 1.5, 0.4, 1) backwards; }
+.station-ping .ping-wave { stroke-width: 10px; animation: ping-wave 1.35s cubic-bezier(0.1, 0.7, 0.3, 1) infinite backwards; }
+.station-ping .ping-glow { opacity: 0.3; animation: ping-glow 0.9s ease-in-out infinite alternate; }
+.station-ping .ping-target { transform-box: fill-box; transform-origin: center; animation: ping-spin 2.4s linear infinite; }
+.station-ping .ping-pin { animation: ping-bounce 0.8s cubic-bezier(0.3, 0, 0.5, 1) infinite alternate; }
+.station-ping .ping-tag { font-family: var(--ui); font-size: 28px; font-weight: 800; fill: #fff; }
 @keyframes ping-wave {
-  0% { r: 24px; opacity: 1; stroke-width: 4px; }
-  100% { r: 56px; opacity: 0; stroke-width: 1px; }
+  0% { r: 28px; opacity: 1; stroke-width: 10px; }
+  100% { r: 220px; opacity: 0; stroke-width: 3px; }
 }
+@keyframes ping-glow { from { opacity: 0.18; } to { opacity: 0.45; } }
+@keyframes ping-spin { to { transform: rotate(360deg); } }
+@keyframes ping-bounce { from { transform: translateY(0); } to { transform: translateY(-14px); } }
+
+/* Banner across the top of the map while a teammate is pointing somewhere */
+.ping-banners { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; max-width: calc(100% - 24px); }
+.ping-banner {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px;
+  font: 700 15px var(--ui); color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  background: linear-gradient(135deg, #3b2370f2, #1b1530f2); border: 2px solid var(--ping, #a78bfa);
+  box-shadow: 0 0 0 0 var(--ping, #a78bfa), 0 8px 24px #000a;
+  animation: banner-in 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) backwards, banner-glow 1s ease-in-out infinite alternate;
+}
+.ping-banner strong { color: var(--ping, #c4b5fd); }
+.ping-banner .ping-banner-icon { font-size: 18px; animation: ping-bounce 0.8s ease-in-out infinite alternate; }
+@keyframes banner-in { from { opacity: 0; transform: translateY(-16px) scale(0.9); } }
+@keyframes banner-glow { to { box-shadow: 0 0 22px 2px var(--ping, #a78bfa), 0 8px 24px #000a; } }
 .arrest-alert .arrest-alert-icon { font-size: 54px; margin-bottom: 8px; }
 .arrest-alert-hint { display: block; margin-top: 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #888; }
 .choice.ping { border-color: #3b5a82; background: #162436; }

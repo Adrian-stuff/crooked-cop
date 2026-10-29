@@ -47,6 +47,29 @@ function chime() {
   }
 }
 
+// A teammate pointing at a station: a quick rising "blip blip", louder than the turn chime.
+export function pingSound() {
+  if (!audio) return;
+  try {
+    const t = audio.currentTime;
+    for (const [i, freq] of [988, 1319, 988, 1319].entries()) {
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      const at = t + i * 0.09;
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(0.25, at + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.08);
+      osc.connect(gain).connect(audio.destination);
+      osc.start(at);
+      osc.stop(at + 0.09);
+    }
+  } catch {
+    // sound is a nicety; ignore failures
+  }
+}
+
 // When your move comes up: chime (if sound is on), and flash the tab title while the tab is hidden.
 export function useTurnAlert(view: View, sound: boolean) {
   const mine = isMyMove(view);

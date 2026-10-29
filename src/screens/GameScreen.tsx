@@ -14,7 +14,7 @@ import { seatIdentities } from '../game/identity';
 import { channelKind, channelLabel, useRecentChat } from '../game/recentChat';
 import { useEnvelopeHighlight } from '../game/envelopeHighlight';
 import { useFullscreen } from '../game/useFullscreen';
-import { unlockSound, useTurnAlert } from '../game/turnAlert';
+import { pingSound, unlockSound, useTurnAlert } from '../game/turnAlert';
 import { marksFor, type Mode } from '../game/selection';
 import type { Game } from '../net/useGame';
 
@@ -53,18 +53,26 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
   const ids = useMemo(() => seatIdentities(view.players), [view.players]);
   const { highlight, onHighlight, swept, lastSeen } = useEnvelopeHighlight(view);
 
-  // Teammate pings / location alerts from police chat in the last few seconds.
+  // Teammate pings / location alerts from police chat, kept up longer than chat bubbles so nobody misses them.
+  const pingChat = useRecentChat(game.chat, game.clockOffset, 12_000);
   const pings = useMemo(() => {
-    const list: { station: string; by: string; name: string }[] = [];
-    for (const m of recentChat) {
+    const list: { id: string; station: string; by: string; name: string }[] = [];
+    for (const m of pingChat) {
       if (m.channel !== 'police') continue;
       const match = m.text.match(/\[ping:([a-z0-9_]+)\]/);
       if (match) {
-        list.push({ station: match[1], by: m.from, name: m.name });
+        list.push({ id: m.id, station: match[1], by: m.from, name: m.name });
       }
     }
     return list;
-  }, [recentChat]);
+  }, [pingChat]);
+  // A new ping from a teammate plays a sound (when sound is on).
+  const heard = useRef(new Set<string>());
+  useEffect(() => {
+    const fresh = pings.filter((p) => !heard.current.has(p.id));
+    for (const p of fresh) heard.current.add(p.id);
+    if (sound && fresh.some((p) => p.by !== view.me)) pingSound();
+  }, [pings, sound, view.me]);
 
   // Reset any half-built selection when the phase changes.
   useEffect(() => {
@@ -159,7 +167,18 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
                   </>
                 }
                 overlay={
-                  ticker.length > 0 && (
+                  <>
+                  {pings.length > 0 && (
+                    <div className="ping-banners" role="status" aria-live="assertive">
+                      {pings.slice(-2).map((p) => (
+                        <div key={p.id} className="ping-banner" style={{ '--ping': ids[p.by]?.color } as React.CSSProperties}>
+                          <span className="ping-banner-icon" aria-hidden="true">📍</span>
+                          <span><strong>{p.by === view.me ? 'You' : p.name}</strong> {p.by === view.me ? 'are' : 'is'} pointing at <strong>{stationLabel(p.station)}</strong></span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {ticker.length > 0 && (
                     <div className="chat-ticker" aria-live="polite">
                       {ticker.map((m) => (
                         <div key={m.id} className={`tick ${channelKind(m.channel)}`}>
@@ -168,7 +187,8 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
                         </div>
                       ))}
                     </div>
-                  )
+                  )}
+                  </>
                 }
               >
                 <div className="board-stage">

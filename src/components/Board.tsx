@@ -23,7 +23,7 @@ interface Props {
   swept?: string[]; // stations your Search covered this round
   lastSeen?: { station: string; round: number }[]; // Heisters your searches spotted recently
   chat?: ChatMessage[]; // messages from the last few seconds, shown as bubbles over the sender
-  pings?: { station: string; by: string; name: string }[];
+  pings?: { id: string; station: string; by: string; name: string }[];
 }
 
 const LABEL_OFFSET: Record<LabelSide, [number, number, 'start' | 'middle' | 'end']> = {
@@ -299,24 +299,37 @@ function ArtifactLayer({ artifacts }: { artifacts: Record<string, number> | null
   );
 }
 
-// Visual radar pulse and tag when a teammate pings / points to a station.
-function PingLayer({ pings, ids }: { pings: { station: string; by: string; name: string }[]; ids: Record<string, Identity> }) {
+// A teammate pointing at a station: shockwaves, a spinning target and a bouncing pin with their name,
+// loud enough to catch the eye anywhere on the map.
+function PingLayer({ pings, ids }: { pings: { id: string; station: string; by: string; name: string }[]; ids: Record<string, Identity> }) {
   if (!pings.length) return null;
   return (
     <g pointerEvents="none" className="pings-layer">
-      {pings.map((p, i) => {
+      {pings.map((p) => {
         const st = STATION_BY_ID[p.station];
         if (!st) return null;
         const color = (ids[p.by] ?? SPECTATOR_IDENTITY).color;
-        const tag = `📍 ${p.name}`;
-        const tagW = tag.length * 8.5 + 24;
+        const tag = p.name;
+        const tagW = tag.length * 17 + 80;
         return (
-          <g key={`${p.station}-${p.by}-${i}`} transform={`translate(${st.x} ${st.y})`} className="station-ping">
-            <circle r={36} className="ping-wave" stroke={color} fill="none" strokeWidth={3} />
-            <circle r={28} className="ping-core" stroke={color} fill={color} fillOpacity={0.25} strokeWidth={3} />
-            <g transform="translate(0 -38)">
-              <rect x={-tagW / 2} y={-13} width={tagW} height={24} rx={12} fill="#0b0d11ee" stroke={color} strokeWidth={2} />
-              <text y={4} textAnchor="middle" className="ping-tag">{tag}</text>
+          <g key={p.id} transform={`translate(${st.x} ${st.y})`}>
+            <g className="station-ping">
+              {[0, 1, 2].map((k) => (
+                <circle key={k} r={30} className="ping-wave" stroke={color} fill="none" style={{ animationDelay: `${k * 0.45}s` }} />
+              ))}
+              <circle r={60} fill={color} className="ping-glow" />
+              <circle r={44} className="ping-target" stroke={color} fill="none" strokeWidth={9} strokeDasharray="26 14" />
+              <circle r={31} fill="none" stroke="#fff" strokeWidth={5} />
+              <g className="ping-pin">
+                <g transform="scale(1.5)">
+                  <path d="M0 -30 C -9 -42 -22 -52 -22 -68 A 22 22 0 1 1 22 -68 C 22 -52 9 -42 0 -30 Z" fill={color} stroke="#fff" strokeWidth={4} />
+                  <circle cy={-68} r={8} fill="#fff" />
+                </g>
+                <g transform="translate(0 -172)">
+                  <rect x={-tagW / 2} y={-28} width={tagW} height={54} rx={27} fill="#0b0d11f2" stroke={color} strokeWidth={4} />
+                  <text y={10} textAnchor="middle" className="ping-tag">📍 {tag}</text>
+                </g>
+              </g>
             </g>
           </g>
         );
