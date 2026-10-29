@@ -116,7 +116,7 @@ function play(v: View, send: (m: ClientMsg) => void) {
     else if (!v.accusation && !v.accusationUsed && officer && Math.random() < ACCUSE_CHANCE) {
       const suspects = v.players.filter((p) => p.id !== me.id && (p.role === 'police' || p.role === 'traitor') && p.status === 'active');
       if (suspects.length) act({ type: 'accuse', target: rnd(suspects).id });
-    } else if (!v.accusation && !me.done) act({ type: 'ready' });
+    } else if (!v.accusation && !me.done && officer) act({ type: 'ready' });
   }
 }
 

@@ -394,16 +394,14 @@ function endPolicePhase(g: GameState, t: number) {
   g.exitMustClear = g.exits.filter((ex) => g.exitStreak[ex] >= 2);
   g.phase = 'info';
   g.deadline = t + g.settings.infoSeconds * 1000;
-  for (const p of g.players) {
-    p.done = !((isPolice(p) || p.role === 'heister') && p.status === 'active');
-  }
-  log(g, 'info', 'Information Phase: compare notes. Any officer may call a vote on the Crooked Cop.');
+  // Only the officers take part: the Heisters wait for the next round.
+  for (const p of g.players) p.done = !(isPolice(p) && p.status === 'active');
+  log(g, 'info', 'Information Phase: officers compare notes. Any officer may call a vote on the Crooked Cop.');
 }
 
 function maybeEndInfoPhase(g: GameState, t: number) {
   if (g.phase !== 'info' || g.accusation) return;
-  const relevant = g.players.filter((p) => (isPolice(p) || p.role === 'heister') && p.status === 'active');
-  if (relevant.every((p) => p.done)) beginRound(g, g.round + 1, t);
+  if (activePolice(g).every((p) => p.done)) beginRound(g, g.round + 1, t);
 }
 
 function endGame(g: GameState, winner: 'heisters' | 'police', reason: string) {
@@ -827,6 +825,7 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
         break;
       }
       if (g.phase !== 'info') fail('You can only skip ahead during the Information Phase.');
+      if (!isPolice(me) || me.status !== 'active') fail('Only officers take part in the Information Phase.');
       me.done = true;
       maybeEndInfoPhase(g, t);
       break;

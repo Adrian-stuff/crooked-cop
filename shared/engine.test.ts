@@ -466,6 +466,21 @@ describe('police ultimate zones', () => {
   });
 });
 
+describe('information phase', () => {
+  it('is for the officers only: Heisters are not waited on and cannot skip ahead', () => {
+    let g = placeAll(setup(6));
+    for (const h of byRole(g, 'heister')) g = act(g, h.id, { type: 'endTurn' });
+    while (g.phase === 'police') g = act(g, g.policeTurn!, { type: 'endTurn' });
+    expect(g.phase).toBe('info');
+    const heisters = byRole(g, 'heister');
+    for (const h of heisters) expect(g.players.find((p) => p.id === h.id)!.done).toBe(true);
+    expect(() => act(g, heisters[0].id, { type: 'ready' })).toThrow(/Only officers/);
+    // Once every officer is done talking, the next round starts.
+    for (const p of g.players.filter((x) => x.role === 'police' || x.role === 'traitor')) g = act(g, p.id, { type: 'ready' });
+    expect(g).toMatchObject({ phase: 'heister', round: 2 });
+  });
+});
+
 describe('swapping a spectator into a seat', () => {
   function ready() {
     let g = placeAll(setup(5));

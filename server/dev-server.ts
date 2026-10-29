@@ -4,6 +4,8 @@
 // action, save state, publish per-player views.
 
 import { randomBytes, randomInt } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import type { IncomingMessage } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { addPlayer, applyAction, clearAfk, createGame, GameError, kickPlayer, setConnected, swapSeat, tick, viewFor } from '../shared/engine';
 import { canPost, canRead } from '../shared/chat';
@@ -11,6 +13,25 @@ import type { ClientMsg, ServerMsg } from '../shared/protocol';
 import type { ChatMessage, GameState } from '../shared/types';
 
 const PORT = Number(process.env.GAME_PORT ?? 8787);
+
+// Dev impersonation: only with VITE_DEV_IMPERSONATE=1 in this checkout's .env.development.local (gitignored, so it stays
+// on the machine that made it), and only for connections from this machine itself.
+const DEV_IMPERSONATE = (() => {
+  try {
+    return /^\s*VITE_DEV_IMPERSONATE\s*=\s*1\s*$/m.test(readFileSync(new URL('../.env.development.local', import.meta.url), 'utf8'));
+  } catch {
+    return false;
+  }
+})();
+const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+const localSockets = new WeakSet<WebSocket>();
+function fromThisMachine(req: IncomingMessage): boolean {
+  if (!LOOPBACK.has(req.socket.remoteAddress ?? '')) return false;
+  // Through the Vite proxy every socket looks local; X-Forwarded-For carries the real client.
+  const fwd = req.headers['x-forwarded-for'];
+  const hops = (Array.isArray(fwd) ? fwd.join(',') : fwd ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  return hops.every((h) => LOOPBACK.has(h));
+}
 
 interface Room {
   state: GameState;
@@ -156,6 +177,30 @@ function handle(ws: WebSocket, msg: ClientMsg) {
       sendHistory(room, msg.with);
       return;
     }
+    case 'devRooms':
+    case 'devImpersonate': {
+      if (!DEV_IMPERSONATE || !localSockets.has(ws)) throw new GameError('Impersonation is only for local development on this machine.');
+      if (msg.t === 'devRooms') {
+        send(ws, {
+          t: 'devRooms',
+          rooms: [...rooms.values()].map((r) => ({
+            code: r.state.code, phase: r.state.phase, round: r.state.round,
+            players: r.state.players.map((p) => ({
+              id: p.id, name: p.name, role: p.role, label: p.label, status: p.status, connected: p.connected, afk: !!p.afk,
+            })),
+          })),
+        });
+        return;
+      }
+      const r = rooms.get(msg.code.toUpperCase());
+      if (!r || !r.state.players.some((p) => p.id === msg.playerId)) throw new GameError('No such player in that room.');
+      // A fresh token for the same seat: the real player keeps theirs, and both can drive it.
+      const token = randomBytes(16).toString('hex');
+      r.tokens.set(token, msg.playerId);
+      console.log(`[dev] impersonating ${r.state.players.find((p) => p.id === msg.playerId)!.name} in ${r.state.code}`);
+      send(ws, { t: 'devToken', code: r.state.code, token });
+      return;
+    }
     case 'chat': {
       if (!room || !info) throw new GameError('Join a room first.');
       const text = msg.text.trim().slice(0, 500);
@@ -182,7 +227,8 @@ function handle(ws: WebSocket, msg: ClientMsg) {
 }
 
 const wss = new WebSocketServer({ port: PORT });
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
+  if (DEV_IMPERSONATE && fromThisMachine(req)) localSockets.add(ws);
   ws.on('message', (data) => {
     let msg: ClientMsg;
     try {
@@ -231,4 +277,4 @@ setInterval(() => {
   }
 }, 250);
 
-console.log(`Crooked Cop dev server on ws://localhost:${PORT}`);
+console.log(`Crooked Cop dev server on ws://localhost:${PORT}${DEV_IMPERSONATE ? ' (dev impersonation on for this machine)' : ''}`);

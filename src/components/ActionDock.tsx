@@ -338,6 +338,12 @@ export function ActionDock({ view, mode, path, setMode, setPath, act, facilitato
   // Information phase: talk, and optionally put one officer to a vote.
   const acc = view.accusation;
   const recap = <RoundRecap view={view} />;
+  // It's the officers' phase; a Heister just watches until the next round starts.
+  if (!officer) {
+    return <Dock title="Information Phase" recap={recap}
+      sub={acc ? 'The officers are voting on who the Crooked Cop is. Your next move comes when the round starts.'
+        : 'The officers are comparing notes. Your next move comes when the round starts.'} />;
+  }
   const officers = view.players.filter((p) => isOfficer(p.role) && p.status === 'active');
   const ids = seatIdentities(view.players);
   const token = (p: PublicPlayer, size = 28) => <TokenIcon role={p.role} identity={ids[p.id] ?? SPECTATOR_IDENTITY} text={tokenText(p)} size={size} />;

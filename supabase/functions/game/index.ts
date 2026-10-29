@@ -27,7 +27,10 @@ type Req =
   | { op: 'chat'; code: string; token: string; channel: string; text: string }
   | { op: 'kick'; code: string; token: string; playerId: string }
   | { op: 'swap'; code: string; token: string; seat: string; with: string }
-  | { op: 'leave'; code: string; token: string };
+  | { op: 'leave'; code: string; token: string }
+  // Local dev only: the Vite dev server on the developer's machine adds the key (never shipped to browsers).
+  | { op: 'devRooms'; key: string }
+  | { op: 'devImpersonate'; key: string; code: string; playerId: string };
 
 interface Room {
   code: string;
@@ -70,6 +73,15 @@ async function mutate(code: string, fn: (room: Room) => Partial<Room> | null): P
     await new Promise((r) => setTimeout(r, 30 + Math.random() * 120));
   }
   throw new GameError('The room is busy. Try again.');
+}
+
+// Dev impersonation needs DEV_IMPERSONATE_KEY set as a function secret, and the same key in the request.
+function checkDevKey(key: unknown) {
+  const want = Deno.env.get('DEV_IMPERSONATE_KEY') ?? '';
+  const got = typeof key === 'string' ? key : '';
+  let diff = want.length >= 32 && got.length === want.length ? 0 : 1;
+  for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ (got.charCodeAt(i) || 0);
+  if (diff) throw new GameError('Impersonation is only for local development.');
 }
 
 function playerFor(room: Room, token: string): string {
@@ -256,6 +268,33 @@ async function handle(req: Req) {
         await broadcast(viewMessages(after, t));
       }
       return { msg };
+    }
+
+    case 'devRooms': {
+      checkDevKey(req.key);
+      const since = new Date(t - 12 * 3600_000).toISOString();
+      const { data, error } = await db.from('cc_rooms').select('code,state').gte('updated_at', since)
+        .order('updated_at', { ascending: false }).limit(20);
+      if (error) throw error;
+      return {
+        rooms: (data ?? []).map(({ code, state }: { code: string; state: GameState }) => ({
+          code, phase: state.phase, round: state.round,
+          players: state.players.map((p) => ({
+            id: p.id, name: p.name, role: p.role, label: p.label, status: p.status, connected: p.connected, afk: !!p.afk,
+          })),
+        })),
+      };
+    }
+
+    case 'devImpersonate': {
+      checkDevKey(req.key);
+      // A fresh token for the same seat: the real player keeps theirs, and both can drive it.
+      const token = randomHex(16);
+      const { after } = await mutate(req.code, (room) => {
+        if (!room.state.players.some((p) => p.id === req.playerId)) throw new GameError('No such player in that room.');
+        return { tokens: { ...room.tokens, [token]: req.playerId } };
+      });
+      return { code: after.code, token };
     }
 
     default:

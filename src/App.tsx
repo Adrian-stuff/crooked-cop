@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useGame } from './net/useGame';
 import { USE_SUPABASE } from './net/config';
 import { useSupabaseGame } from './net/useSupabaseGame';
+import { DEV_IMPERSONATE, DevImpersonate } from './components/DevImpersonate';
 import { hasTableGame } from './net/useTableGame';
 import { GameScreen } from './screens/GameScreen';
 import { Home } from './screens/Home';
@@ -47,6 +48,7 @@ function OnlineApp({ onTable }: { onTable: () => void }) {
       {screen}
       {game.conn === 'closed' && game.view && <div className="conn-banner">Connection lost. Reconnecting…</div>}
       {error && <div className="toast" role="alert" onClick={clearError}>{error}</div>}
+      {DEV_IMPERSONATE && <DevImpersonate me={game.view?.me} />}
     </>
   );
 }

@@ -1192,3 +1192,22 @@ input, select {
 .home .home-table .btn.ghost { border: 1px solid #ffffff80; background: #0f1116cc; color: var(--text); }
 .home .home-table .btn.ghost:hover:not(:disabled) { background: #2a2f3b; border-color: var(--gold); }
 .home .home-table { border-top: 1px solid #ffffff40 !important; }
+/* ---------- Local dev: impersonate a player ---------- */
+.dev-imp { position: fixed; left: 12px; bottom: 12px; z-index: 3000; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.dev-imp-toggle { font: 800 11px var(--ui); letter-spacing: 0.12em; padding: 7px 12px; border-radius: 999px; border: 1px dashed #f0a; color: #ffb3ec; background: #2a0f24ee; cursor: pointer; }
+.dev-imp-toggle:hover { background: #3d1535; }
+.dev-imp-panel { width: min(340px, calc(100vw - 24px)); max-height: 70vh; overflow: auto; padding: 10px; border-radius: 12px; border: 1px dashed #f0a; background: #14101aee; box-shadow: 0 12px 40px #000c; backdrop-filter: blur(10px); }
+.dev-imp-panel header { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #ffb3ec; }
+.dev-imp-panel p { margin: 6px 0; }
+.dev-imp-error { color: #ff9b9b; font-size: 12px; }
+.dev-imp-room { margin-top: 10px; }
+.dev-imp-room-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.dev-imp-player { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; width: 100%; text-align: left; font: inherit; font-size: 13px; color: var(--cream); padding: 6px 8px; margin-top: 3px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; }
+.dev-imp-player:hover:not(:disabled) { border-color: #f0a; }
+.dev-imp-player:disabled { opacity: 0.55; cursor: default; }
+.dev-imp-player .muted { grid-column: 1 / -1; }
+.dev-imp-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dev-imp-role { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.dev-imp-role.heister { color: #ff9b9b; }
+.dev-imp-role.traitor { color: #8fdca4; }
+.dev-imp-role.police { color: #9cc3ff; }
