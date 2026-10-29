@@ -122,6 +122,26 @@ export function kickPlayer(state: GameState, hostId: string, targetId: string): 
   return g;
 }
 
+// The host puts a spectator into the seat of a player who is AFK or offline. The seat keeps its id,
+// so its role, station, envelopes and votes carry on; only the person behind it changes. The server
+// then points each person's token at their new id, and the player who was swapped out watches.
+export function swapSeat(state: GameState, hostId: string, seatId: string, spectatorId: string): GameState {
+  const g = structuredClone(state);
+  if (!g.players.find((p) => p.id === hostId)?.isHost) fail('Only the host can swap players in.');
+  if (g.phase === 'lobby' || g.phase === 'ended') fail('Players can only be swapped in during a game.');
+  const seat = g.players.find((p) => p.id === seatId);
+  const sub = g.players.find((p) => p.id === spectatorId);
+  if (!seat || seat.role === 'spectator' || seat.status !== 'active') fail('Pick a player who is still in the game.');
+  if (seat!.connected && !seat!.afk) fail('Only an AFK or disconnected player can be swapped out.');
+  if (!sub || sub.role !== 'spectator' || sub.isHost) fail('Pick a spectator to swap in.');
+  if (!sub!.connected) fail('That spectator is offline.');
+  log(g, 'info', `${sub!.name} took over ${seat!.name}'s seat.`);
+  [seat!.name, sub!.name] = [sub!.name, seat!.name];
+  [seat!.connected, sub!.connected] = [sub!.connected, seat!.connected];
+  seat!.afk = false;
+  return g;
+}
+
 // ---------- Helpers ----------
 
 const activeHeisters = (g: GameState) => g.players.filter((p) => p.role === 'heister' && p.status === 'active');

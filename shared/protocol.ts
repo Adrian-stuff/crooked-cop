@@ -6,6 +6,7 @@ export type ClientMsg =
   | { t: 'resume'; code: string; token: string }
   | { t: 'action'; action: Action }
   | { t: 'kick'; playerId: string }
+  | { t: 'swap'; seat: string; with: string }
   | { t: 'chat'; channel: string; text: string }
   | { t: 'leave' };
 

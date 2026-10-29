@@ -170,6 +170,7 @@ export function useSupabaseGame(): Game {
       history.replaceState(null, '', location.pathname);
     }),
     kick: (playerId: string) => { if (session) run(() => call({ op: 'kick', ...session, playerId })); },
+    swap: (seat: string, withId: string) => { if (session) run(() => call({ op: 'swap', ...session, seat, with: withId })); },
     say: (channel: string, text: string) => { if (session) run(async () => {
       const r = await call<{ msg?: ChatMessage }>({ op: 'chat', ...session, channel, text });
       const msg = r.msg;

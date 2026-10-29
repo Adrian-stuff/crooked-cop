@@ -116,6 +116,7 @@ export function useGame(): Game {
       history.replaceState(null, '', location.pathname);
     },
     kick: (playerId: string) => send({ t: 'kick', playerId }),
+    swap: (seat: string, withId: string) => send({ t: 'swap', seat, with: withId }),
     say: (channel: string, text: string) => send({ t: 'chat', channel, text }),
     act,
   };
@@ -133,6 +134,7 @@ export interface Game {
   join: (code: string, name: string) => void;
   leave: () => void;
   kick: (playerId: string) => void;
+  swap: (seat: string, withId: string) => void; // host: put a spectator into an AFK or offline player's seat
   say: (channel: string, text: string) => void;
   act: (action: Action) => void;
 }

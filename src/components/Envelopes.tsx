@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { LINES, lineName, stationLabel } from '../../shared/map';
 import type { Envelope, ScanResult, SearchResult, TipResult, View } from '../../shared/types';
 import { scanArea } from '../game/envelopeHighlight';
+import { stationPercent } from '../game/geometry';
 import { SPECTATOR_IDENTITY, type Identity } from '../game/identity';
 import { TokenIcon } from './Token';
 
@@ -114,6 +115,27 @@ function Summary({ e, ids }: { e: Envelope; ids: Props['ids'] }) {
     );
   }
   return <span className="env-what">{e.title}</span>;
+}
+
+// Your latest search this round, opened on the map right above the station you searched.
+export function MapEnvelope({ view, onClose }: { view: View; onClose: (id: string) => void }) {
+  const e = view.envelopes.filter((x) => x.to === view.me && x.search && x.round === view.round).at(-1);
+  if (!e || !e.search) return null;
+  const { left, top } = stationPercent(e.search.station);
+  const place = `${top < 45 ? 'below' : 'above'} ${left < 18 ? 'from-left' : left > 82 ? 'from-right' : ''}`;
+  const { text, tone } = outcome(e.search);
+  return (
+    <div key={e.id} className={`map-env ${place}`} style={{ left: `${left}%`, top: `${top}%` }}
+      role="dialog" aria-label={`Search result for ${stationLabel(e.search.station)}`} onClick={(ev) => ev.stopPropagation()}>
+      <header>
+        <span className="env-round">R{e.round}</span>
+        <strong>Search: {stationLabel(e.search.station)}</strong>
+        <span className={`env-chip ${tone}`}>{text}</span>
+        <button className="map-env-close" onClick={() => onClose(e.id)} aria-label="Close search result">×</button>
+      </header>
+      <div className="env-body"><SearchRows r={e.search} /></div>
+    </div>
+  );
 }
 
 export function Envelopes({ view, ids, highlight, onHighlight, fresh }: Props) {

@@ -5,7 +5,7 @@
 
 import { randomBytes, randomInt } from 'node:crypto';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { addPlayer, applyAction, clearAfk, createGame, GameError, kickPlayer, setConnected, tick, viewFor } from '../shared/engine';
+import { addPlayer, applyAction, clearAfk, createGame, GameError, kickPlayer, setConnected, swapSeat, tick, viewFor } from '../shared/engine';
 import { canPost, canRead } from '../shared/chat';
 import type { ClientMsg, ServerMsg } from '../shared/protocol';
 import type { ChatMessage, GameState } from '../shared/types';
@@ -136,6 +136,24 @@ function handle(ws: WebSocket, msg: ClientMsg) {
       for (const k of room.sockets.get(msg.playerId) ?? []) send(k, { t: 'left' });
       room.sockets.delete(msg.playerId);
       broadcast(room);
+      return;
+    }
+    case 'swap': {
+      if (!room || !info) throw new GameError('Join a room first.');
+      room.state = swapSeat(room.state, info.playerId, msg.seat, msg.with);
+      // Each person's token and open sockets now belong to the other id.
+      const other = (pid: string) => (pid === msg.seat ? msg.with : pid === msg.with ? msg.seat : pid);
+      for (const [tok, pid] of room.tokens) room.tokens.set(tok, other(pid));
+      const seatSockets = room.sockets.get(msg.seat);
+      const subSockets = room.sockets.get(msg.with);
+      room.sockets.delete(msg.seat);
+      room.sockets.delete(msg.with);
+      if (subSockets) room.sockets.set(msg.seat, subSockets);
+      if (seatSockets) room.sockets.set(msg.with, seatSockets);
+      for (const [pid, set] of room.sockets) for (const s of set) socketInfo.set(s, { code: room.state.code, playerId: pid });
+      broadcast(room);
+      sendHistory(room, msg.seat);
+      sendHistory(room, msg.with);
       return;
     }
     case 'chat': {

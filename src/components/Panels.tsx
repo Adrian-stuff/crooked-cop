@@ -60,11 +60,15 @@ interface PlayerListProps {
   ids: Record<string, Identity>;
   focus: string | null;
   setFocus: (id: string | null) => void;
+  onSwap?: (seat: string, withId: string) => void; // host only: swap a spectator into an AFK or offline seat
 }
 
-export function PlayerList({ view, ids, focus, setFocus }: PlayerListProps) {
+export function PlayerList({ view, ids, focus, setFocus, onSwap }: PlayerListProps) {
   const order = { heister: 0, traitor: 1, police: 1, unknown: 2, spectator: 3 } as const;
   const players = [...view.players].sort((a, b) => order[a.role] - order[b.role]);
+  const inPlay = view.phase !== 'lobby' && view.phase !== 'ended';
+  // Spectators who could take over a seat: online, and not the facilitator themself.
+  const subs = view.players.filter((p) => p.role === 'spectator' && p.connected && !p.isHost);
   return (
     <section className="panel players">
       <h3>Players</h3>
@@ -94,6 +98,17 @@ export function PlayerList({ view, ids, focus, setFocus }: PlayerListProps) {
               </span>
               {actsThisPhase(view.phase, p) && (
                 <span className={`ready ${p.done ? 'yes' : ''}`} title={p.done ? 'Done' : 'Thinking'}>{p.done ? '✓' : '…'}</span>
+              )}
+              {onSwap && inPlay && p.role !== 'spectator' && p.status === 'active' && (p.afk || !p.connected) && (
+                <div className="swap" onClick={(e) => e.stopPropagation()}>
+                  <select value="" disabled={!subs.length} aria-label={`Swap someone in for ${p.name}`}
+                    title={subs.length ? `${p.name} is ${p.connected ? 'AFK' : 'offline'}. A spectator can take over their seat.`
+                      : 'Nobody is spectating. Someone who joins with the room code now arrives as a spectator, and you can swap them in.'}
+                    onChange={(e) => e.target.value && onSwap(p.id, e.target.value)}>
+                    <option value="">{subs.length ? 'Swap in a spectator…' : 'No spectators to swap in'}</option>
+                    {subs.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
               )}
             </li>
           );

@@ -6,7 +6,7 @@ import { Board } from '../components/Board';
 import { BoardLegend } from '../components/BoardLegend';
 import { BoardPanZoom } from '../components/BoardPanZoom';
 import { Chat } from '../components/Chat';
-import { Envelopes } from '../components/Envelopes';
+import { Envelopes, MapEnvelope } from '../components/Envelopes';
 import { ArrestCard, Log, PhaseBanner, PlayerList, RevealCard, RoleReveal, TopBar } from '../components/Panels';
 import { StatusStrip } from '../components/StatusStrip';
 import { StationPopover } from '../components/StationPopover';
@@ -21,6 +21,13 @@ import type { Game } from '../net/useGame';
 export function GameScreen({ game, view }: { game: Game; view: View }) {
   const boardWrapRef = useRef<HTMLDivElement>(null);
   const { fullscreen, toggle: toggleFullscreen } = useFullscreen(boardWrapRef);
+  // Fullscreen covers the side column, so the map gets its own chat panel and an unread count.
+  const [fsChat, setFsChat] = useState(false);
+  const [fsSeen, setFsSeen] = useState(0);
+  useEffect(() => {
+    if (!fullscreen || fsChat) setFsSeen(game.chat.length);
+  }, [fullscreen, fsChat, game.chat.length]);
+  const fsUnread = Math.max(0, game.chat.length - fsSeen);
   const [mode, setMode] = useState<Mode>(null);
   const [path, setPath] = useState<string[]>([]);
   const [showRole, setShowRole] = useState(view.phase === 'setup');
@@ -28,6 +35,8 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
   const [showNames, setShowNames] = useState(true);
   const [focus, setFocus] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
+  const [closedEnvelope, setClosedEnvelope] = useState<string | null>(null);
+  const latestSearch = view.envelopes.filter((e) => e.to === view.me && e.search && e.round === view.round).at(-1);
   const [sound, setSound] = useState(() => {
     try { return localStorage.getItem('cc-sound') === 'on'; } catch { return false; }
   });
@@ -40,7 +49,7 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
   // New chat pops up on the map: over the sender's pawn, or in a ticker if you can't see them.
   const recentChat = useRecentChat(game.chat, game.clockOffset);
   const onBoard = new Set(view.players.filter((p) => p.station && p.role !== 'spectator' && p.status !== 'escaped').map((p) => p.id));
-  const ticker = recentChat.filter((m) => !onBoard.has(m.from)).slice(-3);
+  const ticker = fullscreen && fsChat ? [] : recentChat.filter((m) => !onBoard.has(m.from)).slice(-3);
   const ids = useMemo(() => seatIdentities(view.players), [view.players]);
   const { highlight, onHighlight, swept, lastSeen } = useEnvelopeHighlight(view);
 
@@ -75,6 +84,13 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
     if (view.phase === 'setup') setShowRole(true);
   }, [view.phase]);
 
+  // Swapped into a seat mid-game: show the newcomer which role they now play.
+  const prevRole = useRef(view.myRole);
+  useEffect(() => {
+    if (prevRole.current === 'spectator' && view.myRole !== 'spectator' && view.phase !== 'lobby') setShowRole(true);
+    prevRole.current = view.myRole;
+  }, [view.myRole, view.phase]);
+
   const marks = useMemo(() => (mode ? marksFor(view, mode, path) : {}), [view, mode, path]);
 
   const onStation = (id: string) => {
@@ -106,6 +122,17 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
                 activeStation={currentStation}
                 activePlayerName={currentTargetName}
                 controls={
+                  <>
+                  {fullscreen && (
+                    <button type="button" className={`board-fs-btn board-chat-btn ${fsChat ? 'is-fs' : ''}`} onClick={() => setFsChat(!fsChat)}
+                      aria-pressed={fsChat} title={fsChat ? 'Hide chat' : 'Show chat'}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                      </svg>
+                      <span>Chat</span>
+                      {!fsChat && fsUnread > 0 && <span className="badge">{fsUnread}</span>}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={`board-fs-btn ${fullscreen ? 'is-fs' : ''}`}
@@ -129,6 +156,7 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
                       </>
                     )}
                   </button>
+                  </>
                 }
                 overlay={
                   ticker.length > 0 && (
@@ -148,12 +176,19 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
                     showNames={showNames} focus={focus} onFocus={setFocus} selected={picked} swept={swept} lastSeen={lastSeen} chat={recentChat}
                     pings={pings}
                     onPick={(id) => setPicked(mode || id === picked ? null : id)} />
+                  {/* After a search the envelope opens over the searched station until you close it. */}
+                  {!picked && latestSearch && latestSearch.id !== closedEnvelope && <MapEnvelope view={view} onClose={setClosedEnvelope} />}
                   {picked && !mode && (
                     <StationPopover view={view} station={picked} ids={ids} act={game.act} onClose={() => setPicked(null)}
                       onPing={(id) => game.say('police', `📍 Pointing at ${stationLabel(id)} [ping:${id}]`)} />
                   )}
                 </div>
               </BoardPanZoom>
+              {fullscreen && fsChat && (
+                <div className="fs-chat">
+                  <Chat view={view} messages={game.chat} say={game.say} />
+                </div>
+              )}
               <BoardLegend view={view} showNames={showNames} setShowNames={setShowNames} showTrails={showTrails} setShowTrails={setShowTrails}
                 fullscreen={fullscreen} onFullscreen={toggleFullscreen}>
                 <a className="legend-more" href="#case-file">Players &amp; log ↓</a>
@@ -168,7 +203,7 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
         </main>
       </div>
       <div className="below-board below-fold" id="case-file">
-        <PlayerList view={view} ids={ids} focus={focus} setFocus={setFocus} />
+        <PlayerList view={view} ids={ids} focus={focus} setFocus={setFocus} onSwap={me?.isHost ? game.swap : undefined} />
         <Log view={view} />
       </div>
       <PhaseBanner view={view} />

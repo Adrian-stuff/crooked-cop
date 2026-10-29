@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AFK_TURN_SECONDS, addPlayer, clearAfk, applyAction, createGame, validatePath, viewFor, GameError } from './engine';
+import { AFK_TURN_SECONDS, addPlayer, clearAfk, applyAction, createGame, setConnected, swapSeat, validatePath, viewFor, GameError } from './engine';
 import { canPost } from './chat';
 import { ADJ, EDGES, EXIT_STATION, SECOND_EXIT, STATIONS, distance, searchArea } from './map';
 import type { Action, GameState } from './types';
@@ -463,6 +463,47 @@ describe('police ultimate zones', () => {
       }
       if (at !== 'clark_airport') expect(starts.size).toBeGreaterThan(1); // the Heister's spot in the stretch varies
     }
+  });
+});
+
+describe('swapping a spectator into a seat', () => {
+  function ready() {
+    let g = placeAll(setup(5));
+    g = addPlayer(g, 'sub', 'Latecomer'); // joins mid-game, so watches
+    const [h] = byRole(g, 'heister');
+    return { g, h };
+  }
+
+  it('hands an offline player\'s seat, with all its game state, to a spectator', () => {
+    const { g: start, h } = ready();
+    const g0 = setConnected(start, h.id, false);
+    const g = swapSeat(g0, 'p0', h.id, 'sub');
+    const seat = g.players.find((p) => p.id === h.id)!;
+    const old = g.players.find((p) => p.id === 'sub')!;
+    expect(seat).toMatchObject({ name: 'Latecomer', connected: true, afk: false, role: 'heister', label: h.label, station: h.station });
+    expect(old).toMatchObject({ name: h.name, connected: false, role: 'spectator' });
+    expect(viewFor(g, h.id, T0).myRole).toBe('heister');
+    expect(g.log.at(-1)!.text).toBe(`Latecomer took over ${h.name}'s seat.`);
+    expect(g.log.at(-1)!.text).not.toMatch(/Heister/); // says nothing about the seat's role
+  });
+
+  it('swaps out an AFK player who is still connected', () => {
+    const { g: start, h } = ready();
+    start.players.find((p) => p.id === h.id)!.afk = true;
+    const g = swapSeat(start, 'p0', h.id, 'sub');
+    expect(g.players.find((p) => p.id === 'sub')!).toMatchObject({ name: h.name, connected: true, role: 'spectator' });
+  });
+
+  it('only lets the host swap a spectator into an AFK or offline seat during play', () => {
+    const { g, h } = ready();
+    const away = setConnected(g, h.id, false);
+    expect(() => swapSeat(away, h.id === 'p1' ? 'p2' : 'p1', h.id, 'sub')).toThrow(/Only the host/);
+    expect(() => swapSeat(g, 'p0', h.id, 'sub')).toThrow(/AFK or disconnected/);
+    expect(() => swapSeat(away, 'p0', h.id, 'p3')).toThrow(/spectator to swap in/);
+    expect(() => swapSeat(setConnected(away, 'sub', false), 'p0', h.id, 'sub')).toThrow(/offline/);
+    let lobby = createGame('ABCD', 'p0', 'Host', 1);
+    lobby = addPlayer(lobby, 'p1', 'One');
+    expect(() => swapSeat(lobby, 'p0', 'p1', 'p0')).toThrow(/during a game/);
   });
 });
 

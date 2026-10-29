@@ -4,7 +4,7 @@
 // their own view on a private Realtime topic named after their secret token.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { addPlayer, applyAction, clearAfk, createGame, GameError, kickPlayer, setConnected, tick, viewFor } from './engine/engine.ts';
+import { addPlayer, applyAction, clearAfk, createGame, GameError, kickPlayer, setConnected, swapSeat, tick, viewFor } from './engine/engine.ts';
 import { canPost, canRead } from './engine/chat.ts';
 import type { Action, ChatMessage, GameState } from './engine/types.ts';
 
@@ -26,6 +26,7 @@ type Req =
   | { op: 'tick'; code: string; token: string }
   | { op: 'chat'; code: string; token: string; channel: string; text: string }
   | { op: 'kick'; code: string; token: string; playerId: string }
+  | { op: 'swap'; code: string; token: string; seat: string; with: string }
   | { op: 'leave'; code: string; token: string };
 
 interface Room {
@@ -197,6 +198,20 @@ async function handle(req: Req) {
         return { state, tokens };
       });
       await broadcast([...viewMessages(after, t), ...removedTokens.map((tok) => ({ topic: topicFor(tok), event: 'left', payload: {} }))]);
+      return { ok: true };
+    }
+
+    case 'swap': {
+      const { after } = await mutate(req.code, (room) => {
+        const hostId = playerFor(room, req.token);
+        const state = swapSeat(room.state, hostId, req.seat, req.with);
+        // Each person's token now points at the other id, so their realtime topic follows them.
+        const other = (pid: string) => (pid === req.seat ? req.with : pid === req.with ? req.seat : pid);
+        const tokens = Object.fromEntries(Object.entries(room.tokens).map(([tok, pid]) => [tok, other(pid)]));
+        return { state, tokens };
+      });
+      const moved = Object.fromEntries(Object.entries(after.tokens).filter(([, pid]) => pid === req.seat || pid === req.with));
+      await broadcast([...viewMessages(after, t), ...(await historyMessages({ ...after, tokens: moved }))]);
       return { ok: true };
     }
 
