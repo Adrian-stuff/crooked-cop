@@ -126,11 +126,15 @@ input, select {
   display: grid;
   place-items: center;
   padding: 24px 16px;
-  background: radial-gradient(ellipse at 50% 20%, #1f3a5f55, transparent 60%), var(--bg);
+    background:
+    url('/assets/bg-skyline.svg') repeat-x 50% 100% / auto 260px,
+    radial-gradient(ellipse 80% 320px at 50% 100%, #d4a24c66, transparent),
+    radial-gradient(ellipse at 50% 18%, #d4a24c33, transparent 55%),
+    linear-gradient(180deg, #121419 0%, #1a2a44 70%, #3a3550 100%);
 }
 .splash { font-family: var(--display); font-size: 22px; }
 .home-card { width: min(440px, 100%); text-align: center; }
-.home { grid-template-rows: 1fr auto; gap: 28px; }
+.home { grid-template-rows: 1fr auto; gap: 28px; position: relative; overflow: hidden; isolation: isolate; }
 .home-card { align-self: center; }
 .home-logo {
   width: min(260px, 70vw);
@@ -141,15 +145,31 @@ input, select {
 @keyframes logo-in { from { opacity: 0; transform: scale(0.85) rotate(-8deg); } }
 @media (prefers-reduced-motion: reduce) { .home-logo { animation: none; } }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.tagline { font-family: var(--type); color: var(--gold); font-size: 16px; margin-top: 6px; }
-.credits { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.tagline { font-family: 'Special Elite'; font-weight: 600; color: var(--gold); font-size: 16px; margin-top: 6px; }
+.credits { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 48px; }
 .team-logo { width: 120px; height: auto; }
 .intro { margin-bottom: 22px; }
 .home .field { text-align: left; }
 .home-actions { display: flex; flex-direction: column; gap: 12px; }
 .home-actions .btn.big { justify-content: center; }
 .join-row { display: flex; gap: 8px; }
-.code-input { flex: 1; text-transform: uppercase; letter-spacing: 0.3em; font-family: var(--display); font-size: 18px; text-align: center; }
+.code-input { flex: 1; text-transform: uppercase; letter-spacing: 0.2em; font-family: var(--ui); font-weight: 700; font-size: 16px; text-align: center; }
+
+.home .field > span:first-child { text-transform: none; letter-spacing: 0; font-size: 13px; }
+.code-input::placeholder { text-transform: none; letter-spacing: normal; font-weight: 400; }
+.btn.chunky { border: 3px solid #0b0d11; border-radius: 8px; box-shadow: 0 4px 0 #0b0d11; font-size: 17px; font-weight: 700; transition: transform 0.08s, box-shadow 0.08s, background 0.15s; }
+.btn.chunky.blue { background: #4f7fc0; color: #000; border-color: #0b0d11; }
+.btn.chunky:hover:not(:disabled) { border-color: #0b0d11; }
+.btn.chunky.blue:hover:not(:disabled) { background: #6a98d4; border-color: #0b0d11; }
+.btn.chunky:active:not(:disabled), .btn.chunky[aria-expanded='true'] { transform: translateY(3px); box-shadow: 0 1px 0 #0b0d11; }
+.join-row .btn.chunky { padding: 10px 22px; font-size: 15px; }
+.home-how { margin-top: 18px; }
+.home-how summary, .home-device summary { color: var(--muted); font-size: 12px; cursor: pointer; }
+.home-how p { max-width: 40ch; margin: 10px auto 0; color: var(--muted); font-size: 13px; }
+.home-table { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #ffffff40; }
+.home-table .btn { border-radius: 999px; }
+.home-device .code-input { width: 100%; margin-bottom: 8px; }
+.home-device .join-row { justify-content: center; }
 
 /* ---------- App shell ---------- */
 .app { min-height: 100%; display: flex; flex-direction: column; }
@@ -1095,3 +1115,14 @@ input, select {
   .game-fold .dock:not(.accusing):not(.deciding):not(.verdict) .dock-text { flex: 0 1 auto; }
   .game-fold .dock-card { min-width: 0; padding: 6px 10px; }
 }
+
+/* Home: train passing left to right */
+.home { position: relative; overflow: hidden; }
+.home::before { content: ''; position: absolute; left: 0; bottom: 13px; width: min(560px, 90%); aspect-ratio: 560 / 44; background: url('/assets/bg-train.svg') no-repeat center / 100% 100%; pointer-events: none; animation: train-pass 5s linear infinite; }
+@keyframes train-pass { from { transform: translateX(-100%); } to { transform: translateX(100vw); } }
+@media (prefers-reduced-motion: reduce) { .home::before { animation: none; left: 50%; transform: translateX(-50%); } }
+
+.home-card, .credits { position: relative; z-index: 1; }
+.home .home-table .btn.ghost { border: 1px solid #ffffff80; background: #0f1116cc; color: var(--text); }
+.home .home-table .btn.ghost:hover:not(:disabled) { background: #2a2f3b; border-color: var(--gold); }
+.home .home-table { border-top: 1px solid #ffffff40 !important; }
