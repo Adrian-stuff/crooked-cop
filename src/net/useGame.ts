@@ -8,12 +8,12 @@ export const WS_URL = import.meta.env.VITE_WS_URL
 // Per-tab session, so several tabs in one browser can be different players.
 const SESSION_KEY = 'crooked-cop-session';
 
-interface Session {
+export interface Session {
   code: string;
   token: string;
 }
 
-function loadSession(): Session | null {
+export function loadSession(): Session | null {
   try {
     return JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? 'null');
   } catch {
@@ -116,6 +116,11 @@ export function useGame(): Game {
       history.replaceState(null, '', location.pathname);
     },
     kick: (playerId: string) => send({ t: 'kick', playerId }),
+    // Dev impersonation: become another seat on this same connection, without leaving the current one.
+    switchSession: (s: Session) => {
+      saveSession(s);
+      send({ t: 'resume', code: s.code, token: s.token });
+    },
     swap: (seat: string, withId: string) => send({ t: 'swap', seat, with: withId }),
     say: (channel: string, text: string) => send({ t: 'chat', channel, text }),
     act,
@@ -135,6 +140,7 @@ export interface Game {
   leave: () => void;
   kick: (playerId: string) => void;
   swap: (seat: string, withId: string) => void; // host: put a spectator into an AFK or offline player's seat
+  switchSession: (s: Session) => void; // dev impersonation: take over another seat in this tab, no reload
   say: (channel: string, text: string) => void;
   act: (action: Action) => void;
 }

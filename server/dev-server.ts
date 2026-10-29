@@ -68,6 +68,14 @@ function sendHistory(room: Room, playerId: string) {
 }
 
 function attach(ws: WebSocket, room: Room, playerId: string) {
+  // A socket switching seats (dev impersonation) stops getting the old seat's views. The old seat isn't
+  // marked offline: switching away isn't leaving.
+  const prev = socketInfo.get(ws);
+  if (prev && (prev.code !== room.state.code || prev.playerId !== playerId)) {
+    const old = rooms.get(prev.code)?.sockets;
+    old?.get(prev.playerId)?.delete(ws);
+    if (old?.get(prev.playerId)?.size === 0) old.delete(prev.playerId);
+  }
   socketInfo.set(ws, { code: room.state.code, playerId });
   if (!room.sockets.has(playerId)) room.sockets.set(playerId, new Set());
   room.sockets.get(playerId)!.add(ws);

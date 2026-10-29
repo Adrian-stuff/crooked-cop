@@ -170,6 +170,8 @@ export function useSupabaseGame(): Game {
       history.replaceState(null, '', location.pathname);
     }),
     kick: (playerId: string) => { if (session) run(() => call({ op: 'kick', ...session, playerId })); },
+    // Dev impersonation: resume as another seat. The realtime topic follows the new token; no leave is sent.
+    switchSession: (s: Session) => run(async () => onJoined(await call<Joined>({ op: 'resume', ...s }))),
     swap: (seat: string, withId: string) => { if (session) run(() => call({ op: 'swap', ...session, seat, with: withId })); },
     say: (channel: string, text: string) => { if (session) run(async () => {
       const r = await call<{ msg?: ChatMessage }>({ op: 'chat', ...session, channel, text });
