@@ -273,17 +273,17 @@ export function Log({ view }: { view: View }) {
 
 const ROLE_COPY = {
   heister: {
-    img: '/assets/role-heister.png',
+    img: '/assets/role-heister-01.png',
     title: 'You are a Heister',
     body: 'Everyone knows who you are, but not where you are. Grab at least half of the Artifacts and escape through an Exit Station before time runs out.',
   },
   traitor: {
-    img: '/assets/role-crooked.png',
+    img: '/assets/role-crooked-01.png',
     title: 'You are the Crooked Cop',
     body: "Act like a loyal officer. After each turn you'll get a tip-off with the Heisters' exact locations. Feed the team believable lies and don't get voted out.",
   },
   police: {
-    img: '/assets/role-cop.png',
+    img: '/assets/role-cop-01.png',
     title: 'You are a Cop',
     body: 'Track the Heisters with searches and clues, arrest both of them, and watch out: one of your fellow officers is lying to you.',
   },
