@@ -583,3 +583,18 @@
   }
 }
 
+.rules-presets-cards { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.rules-preset-card { display: block; width: 100%; padding: 10px 12px; text-align: left; font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+.rules-preset-card:hover { border-color: var(--slate); }
+.rules-preset-card.active { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); background: #2a2516; }
+.rules-preset-card strong { display: block; color: var(--cream); font-size: 17px; }
+.rules-preset-card span { display: block; margin-top: 2px; font-size: 13px; }
+.rules-preset-card small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
+.rules-summary-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.rules-summary-row:last-child { border-bottom: 0; }
+.rules-summary-row > span:first-child { color: var(--muted); font-size: 13px; flex: none; }
+.rules-summary-row > span:last-child { text-align: right; font-size: 14px; font-weight: 600; color: var(--cream); }
+.rules-advanced { margin-top: 14px; }
+.rules-advanced > summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+.rules-advanced > summary:hover { color: var(--text); }
+

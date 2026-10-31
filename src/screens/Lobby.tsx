@@ -29,6 +29,19 @@ export function Lobby({ game, view }: { game: Game; view: View }) {
             <button className="btn ghost small" onClick={() => navigator.clipboard?.writeText(link)}>Copy invite link</button>
           </div>
 
+          <details className="how-it-works" open>
+          <summary>How it works</summary>
+          <ol className="steps">
+            <li><strong>Invite friends.</strong> Share the room code or the invite link.</li>
+            <li className={canStart ? 'done' : ''}><strong>Gather players</strong> — {MIN_PLAYERS} to {MAX_PLAYERS} can play.</li>
+            <li>
+              {me.isHost
+                ? <><strong>Start the game.</strong> Press “Deal roles &amp; start” to give everyone a secret role.</>
+                : <><strong>Wait for the host.</strong> They deal everyone a secret role and start the game.</>}
+            </li>
+          </ol>
+          </details>
+
           <h3>Players at the table ({n}/{MAX_PLAYERS})</h3>
           <ul className="seat-list">
             {view.players.map((p) => (
@@ -46,6 +59,13 @@ export function Lobby({ game, view }: { game: Game; view: View }) {
             {me.isHost ? 'Sit out as facilitator (see everything, don’t play)' : 'Watch as a spectator'}
           </label>
 
+          <details className="how-it-works" open>
+          <summary>Secret roles</summary>
+            <p><span className="tag heister">Heister</span> Grab Artifacts and escape through an exit before the rounds run out. </p>
+            <p><span className="tag police">Police</span> Search stations and arrest the Heisters. </p>
+            <p><span className="tag traitor">Crooked Cop</span> One officer is secretly feeding the thieves. </p>
+          </details>
+
           <div className="role-split">
             {canStart
               ? <>With {n} players: <strong>{h} Heister{h > 1 ? 's' : ''}</strong>, <strong>{n - h} Police</strong>, and one of the Police is secretly the <strong>Crooked Cop</strong>. Roles are dealt at random.{' '}
@@ -54,7 +74,7 @@ export function Lobby({ game, view }: { game: Game; view: View }) {
           </div>
 
           {me.isHost ? (
-            <button className="btn primary big" disabled={!canStart} onClick={() => game.act({ type: 'start' })}>Deal roles &amp; start</button>
+            <button className="btn primary big chunky" disabled={!canStart} onClick={() => game.act({ type: 'start' })}>Deal roles &amp; start</button>
           ) : <p className="muted">Waiting for the host to start…</p>}
         </section>
 
