@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { LINES, MAP_HEIGHT, MAP_WIDTH, STATIONS, type LabelSide, type Station } from '../../shared/map';
 import { Rails } from '../components/Rails';
 import { StationLabels } from '../components/StationLabels';
 import { LABEL_SIZE, MAJOR_LABEL_SIZE, labelSize } from '../game/geometry';
-import { mapCode, parseMapFile, validate, type MapDraft, type Pt, type SegPoint } from './mapCode';
+import { checkDraft, mapCode, parseMapFile, validate, type MapDraft, type Pt, type SegPoint } from './mapCode';
 
 const DRAFT_KEY = 'crooked-cop:map-editor-draft';
 const SIDES: LabelSide[] = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
@@ -17,12 +17,30 @@ type Drag =
 
 const shipped = (): MapDraft => structuredClone({ stations: STATIONS, lines: LINES });
 
-function loadDraft(): MapDraft {
+// Small string hash of the shipped map, so a draft made against an older shared/map.ts is noticed.
+function fingerprint(): string {
+  const text = JSON.stringify({ stations: STATIONS, lines: LINES });
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+// The saved draft if it is valid and was made from the current shipped map; otherwise the shipped map.
+function loadDraft(): { map: MapDraft; notice: string | null } {
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
-    if (raw) return JSON.parse(raw) as MapDraft;
+    if (raw) {
+      try {
+        const saved = JSON.parse(raw) as { fp?: unknown; map?: unknown };
+        const map = checkDraft(saved?.map);
+        if (saved.fp === fingerprint()) return { map, notice: null };
+        return { map: shipped(), notice: 'shared/map.ts changed since your draft was saved, so the older draft was discarded.' };
+      } catch {
+        return { map: shipped(), notice: 'The saved draft was invalid and was discarded.' };
+      }
+    }
   } catch { /* no storage: start from the shipped map */ }
-  return shipped();
+  return { map: shipped(), notice: null };
 }
 
 function uniqueId(base: string, taken: Set<string>) {
@@ -58,7 +76,9 @@ function NumberField({ value, onChange, min, max }: { value: number; onChange: (
 const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
 export default function MapEditor({ onClose }: { onClose: () => void }) {
-  const [map, setMap] = useState<MapDraft>(loadDraft);
+  const [initial] = useState(loadDraft);
+  const [map, setMap] = useState<MapDraft>(initial.map);
+  const mapRef = useRef(map); // mirrors the state so history can be updated outside setState updaters
   const past = useRef<MapDraft[]>([]);
   const future = useRef<MapDraft[]>([]);
   const [mode, setMode] = useState<Mode>('select');
@@ -67,12 +87,12 @@ export default function MapEditor({ onClose }: { onClose: () => void }) {
   const [activeSeg, setActiveSeg] = useState(0);
   const [snap, setSnap] = useState(true);
   const [view, setView] = useState(HOME_VIEW);
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(initial.notice);
   const drag = useRef<Drag | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(map)); } catch { /* draft just won't survive a reload */ }
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ fp: fingerprint(), map })); } catch { /* draft just won't survive a reload */ }
   }, [map]);
 
   useEffect(() => {
@@ -86,29 +106,35 @@ export default function MapEditor({ onClose }: { onClose: () => void }) {
   const warnings = useMemo(() => validate(map), [map]);
   const line = map.lines[activeLine];
 
-  // Every edit goes through commit (undoable) or, mid-drag, through setMap directly.
-  const commit = useCallback((next: MapDraft | ((m: MapDraft) => MapDraft)) => {
-    setMap((cur) => {
-      const n = typeof next === 'function' ? next(cur) : next;
-      if (n === cur) return cur;
-      past.current = [...past.current.slice(-99), cur];
-      future.current = [];
-      return n;
-    });
+  const apply = useCallback((next: MapDraft) => {
+    mapRef.current = next;
+    setMap(next);
   }, []);
+
+  // Every edit goes through commit (undoable) or, mid-drag, through apply directly.
+  const commit = useCallback((next: MapDraft | ((m: MapDraft) => MapDraft)) => {
+    const cur = mapRef.current;
+    const n = typeof next === 'function' ? next(cur) : next;
+    if (n === cur) return;
+    past.current = [...past.current.slice(-99), cur];
+    future.current = [];
+    apply(n);
+  }, [apply]);
 
   const undo = useCallback(() => {
     const prev = past.current.pop();
     if (!prev) return;
-    setMap((cur) => { future.current.push(cur); return prev; });
+    future.current.push(mapRef.current);
+    apply(prev);
     setSel(null);
-  }, []);
+  }, [apply]);
   const redo = useCallback(() => {
     const next = future.current.pop();
     if (!next) return;
-    setMap((cur) => { past.current.push(cur); return next; });
+    past.current.push(mapRef.current);
+    apply(next);
     setSel(null);
-  }, []);
+  }, [apply]);
 
   const snapPt = useCallback((p: Pt): Pt => (snap ? { x: Math.round(p.x / 10) * 10, y: Math.round(p.y / 10) * 10 } : { x: Math.round(p.x), y: Math.round(p.y) }), [snap]);
 
@@ -251,7 +277,7 @@ export default function MapEditor({ onClose }: { onClose: () => void }) {
     const to = { x: d.start.x + now.x - d.from.x, y: d.start.y + now.y - d.from.y };
     // Labels move freely: a 10-unit grid is too coarse for text.
     const p = d.sel.kind === 'label' ? { x: Math.round(to.x), y: Math.round(to.y) } : snapPt(to);
-    setMap((m) => setPoint(m, d.sel, p));
+    apply(setPoint(mapRef.current, d.sel, p));
   };
 
   const onUp = () => { drag.current = null; };
@@ -277,7 +303,9 @@ export default function MapEditor({ onClose }: { onClose: () => void }) {
 
   // The window listener binds once and reads the latest handlers from here.
   const keys = useRef<{ undo: () => void; redo: () => void; deleteSel: () => void; onClose: () => void; sel: Sel; setSel: (s: Sel) => void; nudge: (dx: number, dy: number) => void; tilt: (deg: number) => void }>(null!);
-  keys.current = {
+  // Runs every render on purpose: keeps the latest handlers in the ref.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => { keys.current = {
     undo, redo, deleteSel, onClose, sel, setSel,
     tilt: (deg) => {
       if (sel?.kind !== 'station' && sel?.kind !== 'label') return;
@@ -291,7 +319,7 @@ export default function MapEditor({ onClose }: { onClose: () => void }) {
         : (map.lines[sel.line].segments[sel.seg][sel.idx] as Pt);
       if (at) commit((m) => setPoint(m, sel, { x: at.x + dx, y: at.y + dy }));
     },
-  };
+  }; });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e.target)) return;
@@ -325,7 +353,7 @@ export default function MapEditor({ onClose }: { onClose: () => void }) {
 
   const save = async () => {
     try {
-      const res = await fetch('/__map-editor/save', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: code() });
+      const res = await fetch('/__map-editor/save', { method: 'POST', headers: { 'content-type': 'text/plain', 'x-map-editor': '1' }, body: code() });
       setStatus(res.ok ? 'Saved to shared/map.ts and synced to the edge function.' : `Save failed: ${await res.text()}`);
     } catch (err) {
       setStatus(`Save failed: ${String(err)}`);

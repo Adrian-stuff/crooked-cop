@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useGame } from './net/useGame';
 import { USE_SUPABASE } from './net/config';
 import { useSupabaseGame } from './net/useSupabaseGame';
@@ -10,8 +10,10 @@ import { Lobby } from './screens/Lobby';
 import { CopsScreen } from './screens/CopsScreen';
 import { DisplayScreen } from './screens/DisplayScreen';
 import { TableApp } from './screens/TableScreen';
-import { MapEditorGate } from './editor/MapEditorGate';
 import { SoundControl } from './components/SoundControl';
+
+// Dev only: the ternary on import.meta.env.DEV lets Vite drop the editor (and its chunk) from production builds.
+const MapEditorGate = import.meta.env.DEV ? lazy(() => import('./editor/MapEditorGate').then((m) => ({ default: m.MapEditorGate }))) : null;
 
 const useBackend = USE_SUPABASE ? useSupabaseGame : useGame;
 
@@ -24,7 +26,7 @@ export default function App() {
     <>
       <Screens />
       <SoundControl />
-      <MapEditorGate />
+      {MapEditorGate && <Suspense fallback={null}><MapEditorGate /></Suspense>}
     </>
   );
 }

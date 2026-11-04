@@ -11,7 +11,9 @@ export type SegPoint = string | Pt;
 export const MARK_START = "// @map-editor:start (everything down to @map-editor:end is rewritten by the map editor's Save)";
 export const MARK_END = '// @map-editor:end';
 
-const q = (s: string) => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+// A single-quoted TS string literal. JSON.stringify escapes backslashes, newlines and other control
+// characters, so a name can never end the literal or break the generated file.
+const q = (s: string) => `'${JSON.stringify(s).slice(1, -1).replace(/\\"/g, '"').replace(/'/g, "\\'")}'`;
 const pt = (p: SegPoint) => (typeof p === 'string' ? q(p) : `{ x: ${p.x}, y: ${p.y} }`);
 
 // Packs items onto lines no wider than `width`, each line prefixed by `indent`.
@@ -118,7 +120,13 @@ function lexer(src: string): () => Tok | undefined {
       if ('[]{}(),:;='.includes(c)) { i++; return { t: 'p', v: c }; }
       if (c === "'" || c === '"') {
         let v = '';
-        for (i++; i < src.length && src[i] !== c; i++) v += src[i] === '\\' ? src[++i] : src[i];
+        for (i++; i < src.length && src[i] !== c; i++) {
+          if (src[i] !== '\\') { v += src[i]; continue; }
+          const e = src[++i];
+          const hex = e === 'u' ? /^[0-9a-fA-F]{4}/.exec(src.slice(i + 1)) : e === 'x' ? /^[0-9a-fA-F]{2}/.exec(src.slice(i + 1)) : null;
+          if (hex) { v += String.fromCharCode(parseInt(hex[0], 16)); i += hex[0].length; }
+          else v += ({ n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', v: '\v', 0: '\0' } as Record<string, string>)[e] ?? e;
+        }
         if (i >= src.length) throw new Error('Unterminated string.');
         i++;
         return { t: 's', v };
@@ -184,7 +192,7 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const isPt = (v: unknown): v is Pt => !!v && typeof v === 'object' && isNum((v as Pt).x) && isNum((v as Pt).y);
 
 // Keeps only fields the map knows about, so a hand-edited file can't smuggle in anything else.
-function checkDraft(raw: unknown): MapDraft {
+export function checkDraft(raw: unknown): MapDraft {
   const { stations, lines } = (raw ?? {}) as { stations?: unknown; lines?: unknown };
   if (!Array.isArray(stations) || !Array.isArray(lines)) throw new Error('The file has no stations and lines.');
   const outStations = stations.map((st: Record<string, unknown>, i): Station => {
