@@ -858,8 +858,6 @@ input, select {
 .recap-item.ultimate { border-color: #7a6230; color: var(--gold); }
 .recap-item.gold { border-color: #4d3f1c; color: #f2d58a; }
 
-.sound-toggle { margin-left: auto; }
-.leave.with-sound { margin-left: 0; }
 
 /* ---------- Accusation vote ---------- */
 .dock.deciding { border-color: var(--gold); background: #231d10; box-shadow: 0 0 0 2px #d4a24c55, 0 -10px 30px #0008; }

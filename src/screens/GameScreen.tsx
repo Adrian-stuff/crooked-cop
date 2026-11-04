@@ -18,7 +18,7 @@ import { useTurnAlert } from '../game/turnAlert';
 import { marksFor, type Mode } from '../game/selection';
 import { stopAllBots } from '../net/bots';
 import type { Game } from '../net/useGame';
-import { playPing, setSoundSettings, useMusic, useSoundSettings, useTimeWarning } from '../game/sound';
+import { playPing, useMusic, useTimeWarning } from '../game/sound';
 
 export function GameScreen({ game, view }: { game: Game; view: View }) {
   const boardWrapRef = useRef<HTMLDivElement>(null);
@@ -39,10 +39,9 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
   const [picked, setPicked] = useState<string | null>(null);
   const [closedEnvelope, setClosedEnvelope] = useState<string | null>(null);
   const latestSearch = view.envelopes.filter((e) => e.to === view.me && e.search && e.round === view.round).at(-1);
-  const { effects } = useSoundSettings();
   useTurnAlert(view);
   useMusic(view.phase === 'ended' ? 'lobby' : 'game', view.phase === 'info');
-  useTimeWarning(view.phase, useCountdown(view.deadline, game.clockOffset), false);
+  useTimeWarning(view.phase, useCountdown(view.deadline, game.clockOffset), false); // online games have no facilitator pause
   // New chat pops up on the map: over the sender's pawn, or in a ticker if you can't see them.
   const recentChat = useRecentChat(game.chat, game.clockOffset);
   const onBoard = new Set(view.players.filter((p) => p.station && p.role !== 'spectator' && p.status !== 'escaped').map((p) => p.id));
@@ -118,7 +117,7 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
     <div className="app game-screen">
       {/* Everything needed to play fits in one screen; the players list and the log sit below it. */}
       <div className="game-fold">
-        <TopBar view={view} onLeave={() => { stopAllBots(); game.leave(); }} sound={effects} onSound={(on) => setSoundSettings({ effects: on })} />
+        <TopBar view={view} onLeave={() => { stopAllBots(); game.leave(); }} />
         <main className="game">
           <div className="board-col">
             <div ref={boardWrapRef} className={`board-wrap ${fullscreen ? 'is-fullscreen' : ''}`}>

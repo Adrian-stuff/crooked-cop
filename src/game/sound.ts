@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import type { Role } from '../../shared/types';
 
 // All game audio is synthesized here with the Web Audio API: original music loops, timer and turn
@@ -63,7 +63,9 @@ let noise: AudioBuffer;
 function audio(): AudioContext | null {
   if (ctx) return ctx;
   try {
-    ctx = new AudioContext();
+    const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctor) return null;
+    ctx = new Ctor();
   } catch {
     return null;
   }
@@ -117,14 +119,19 @@ function applyLevels(instant = false) {
 export function unlockSound() {
   const c = audio();
   if (!c) return;
-  if (c.state === 'suspended') void c.resume().then(startScheduler, () => {});
-  else startScheduler();
+  if (c.state === 'suspended') void c.resume().then(() => { startScheduler(); removeUnlockListeners(); }, () => {});
+  else { startScheduler(); if (c.state === 'running') removeUnlockListeners(); }
 }
 
+// Touch pointerdown doesn't count as an audio user activation, so also try on release/click/touchend.
+// The listeners stay until the context is really running, so a rejected resume is retried.
+const UNLOCK_EVENTS = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const;
+function removeUnlockListeners() {
+  if (typeof window === 'undefined') return;
+  for (const ev of UNLOCK_EVENTS) window.removeEventListener(ev, unlockSound, { capture: true });
+}
 if (typeof window !== 'undefined') {
-  const once = () => unlockSound();
-  window.addEventListener('pointerdown', once, { capture: true });
-  window.addEventListener('keydown', once, { capture: true });
+  for (const ev of UNLOCK_EVENTS) window.addEventListener(ev, unlockSound, { capture: true });
 }
 
 // ---------- instruments ----------
@@ -304,7 +311,8 @@ const HEIST: Track = {
     if (s % 2 === 0) hat(c, out, t, s % 4 === 2 ? 0.07 : 0.04, s === 14);
     if (s === 0 || s === 6) stab(c, { ...out, send: 0.25 }, t, HEIST_CHORDS[bar], sd * 1.5, 0.035);
     if (bar === 3 && loop % 2 === 1 && s >= 8) tone(c, { ...out, send: 0.3 }, t, hz(HEIST_ARP[s % 4] + 12), { type: 'square', gain: 0.025, release: sd * 1.2, cutoff: 2400 });
-    if (bar === 3 && s === 15 && loop % 4 === 3) burst(c, { ...out, send: 0.4 }, t - sd * 12, { type: 'bandpass', freq: 400, sweepTo: 6000, q: 2, gain: 0.05, attack: sd * 11, release: 0.05 });
+    // Starts 3 steps into the last bar and builds for 11 steps, so it is always scheduled ahead of now.
+    if (bar === 3 && s === 3 && loop % 4 === 3) burst(c, { ...out, send: 0.4 }, t, { type: 'bandpass', freq: 400, sweepTo: 6000, q: 2, gain: 0.05, attack: sd * 11, release: 0.05 });
   },
 };
 
@@ -339,7 +347,7 @@ function tickScheduler() {
   if (nextAt < ctx.currentTime - 0.5) nextAt = ctx.currentTime + 0.05;
   while (nextAt < ctx.currentTime + 0.15) {
     const t = nextAt + (step % 2 === 1 ? track.swing * sd : 0);
-    if (settings.music) track.play(ctx, { dest: sceneGain, send: 0.2 }, step, t, sd, loop);
+    if (settings.music && settings.volume > 0) track.play(ctx, { dest: sceneGain, send: 0.2 }, step, t, sd, loop);
     nextAt += sd;
     step++;
     if (step >= track.steps) { step = 0; loop++; }
@@ -358,7 +366,10 @@ function stopScheduler() {
   sceneGain = null;
 }
 
+let pendingStop: ReturnType<typeof setTimeout> | null = null;
+
 function setScene(next: MusicScene) {
+  if (pendingStop) { clearTimeout(pendingStop); pendingStop = null; }
   if (next === scene) return;
   stopScheduler();
   scene = next;
@@ -372,7 +383,11 @@ export function useMusic(next: MusicScene, quiet = false) {
   }, [quiet]);
   useEffect(() => {
     setScene(next);
-    return () => { if (scene === next) setScene(null); };
+    // Deferred so moving between screens with the same scene doesn't restart the track.
+    return () => {
+      if (pendingStop) clearTimeout(pendingStop);
+      pendingStop = setTimeout(() => { pendingStop = null; if (scene === next) setScene(null); }, 300);
+    };
   }, [next]);
 }
 
@@ -467,9 +482,14 @@ const STINGS: Record<Exclude<Role, 'spectator'>, (c: AudioContext, out: Out, t: 
 // Clock ticks for the last 10 seconds of a timed phase, and an alarm when it runs out.
 const WARN_PHASES = new Set(['heister', 'police', 'info']);
 export function useTimeWarning(phase: string, secs: number | null, paused: boolean) {
+  const prev = useRef<{ phase: string; secs: number | null } | null>(null);
   useEffect(() => {
+    const before = prev.current;
+    prev.current = { phase, secs };
     if (paused || secs === null || !WARN_PHASES.has(phase)) return;
-    if (secs === 0) playTimeUp();
-    else if (secs <= 10) playTick(secs <= 3);
+    if (secs === 0) {
+      // Only an actual run-down counts; joining a phase already at 0 stays silent.
+      if (before && before.phase === phase && before.secs !== null && before.secs > 0) playTimeUp();
+    } else if (secs <= 10) playTick(secs <= 3);
   }, [phase, secs, paused]);
 }

@@ -23,11 +23,9 @@ const PHASE_NAME: Record<string, string> = {
 interface TopBarProps {
   view: View;
   onLeave: () => void;
-  sound?: boolean;
-  onSound?: (on: boolean) => void;
 }
 
-export function TopBar({ view, onLeave, sound, onSound }: TopBarProps) {
+export function TopBar({ view, onLeave }: TopBarProps) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -35,13 +33,7 @@ export function TopBar({ view, onLeave, sound, onSound }: TopBarProps) {
         <span>The Crooked Cop</span>
       </div>
       <div className="room">Room <strong>{view.code}</strong></div>
-      {onSound && (
-        <button className="btn ghost small sound-toggle" aria-pressed={!!sound} onClick={() => onSound(!sound)}
-          title="Sound effects: your-turn chime, timer warnings and role reveals">
-          {sound ? 'Sound on' : 'Sound off'}
-        </button>
-      )}
-      <button className={`btn ghost small leave ${onSound ? 'with-sound' : ''}`} onClick={onLeave}>Leave</button>
+      <button className="btn ghost small leave" onClick={onLeave}>Leave</button>
     </header>
   );
 }
