@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import type { Game } from '../net/useGame';
+import { useMusic } from '../game/sound';
 
 export function Home({ game, onTable }: { game: Game; onTable: () => void }) {
+  useMusic('lobby');
   const initialCode = new URLSearchParams(location.search).get('room')?.toUpperCase() ?? '';
   const [name, setName] = useState(() => {
     try { return localStorage.getItem('crooked-cop-name') ?? ''; } catch { return ''; }
@@ -27,7 +29,7 @@ export function Home({ game, onTable }: { game: Game; onTable: () => void }) {
   return (
     <main className="home">
       <div className="home-card">
-        <img src="/assets/logo-crooked-cop.png" alt="" className="home-logo" width={560} height={560} />
+        <img src="/assets/brand/logo-crooked-cop.png" alt="" className="home-logo" width={560} height={560} />
         <h1 className="visually-hidden">The Crooked Cop</h1>
         <p className="tagline">He swore to protect. He chose to betray.</p>
         <p className="muted intro">4 to 8 players. Thieves steal, police chase, and one cop is a traitor.</p>
@@ -104,7 +106,7 @@ export function Home({ game, onTable }: { game: Game; onTable: () => void }) {
 
       <footer className="credits">
         <span className="muted small">A game by</span>
-        <img src="/assets/logo-out-of-track.png" alt="Out of Track" className="team-logo" width={480} height={427} />
+        <img src="/assets/brand/logo-out-of-track.png" alt="Out of Track" className="team-logo" width={480} height={427} />
         <span className="muted small">BSIT 3-8</span>
       </footer>
     </main>

@@ -23,7 +23,7 @@ export function BoardLegend({ view, showNames, setShowNames, showTrails, setShow
       <span><TokenIcon role="police" identity={SPECTATOR_IDENTITY} text="" size={18} /> Officer</span>
       <span><TokenIcon role="heister" identity={SPECTATOR_IDENTITY} text="" size={18} /> Heister</span>
       <span className="lg-note">Colour = player</span>
-      {view.artifacts && <span><img src="/assets/artifact.png" alt="" width={16} height={16} /> Artifact</span>}
+      {view.artifacts && <span><img src="/assets/icons/artifact.png" alt="" width={16} height={16} /> Artifact</span>}
       <label className="check small">
         <input type="checkbox" checked={showNames} onChange={(e) => setShowNames(e.target.checked)} /> Name tags
       </label>

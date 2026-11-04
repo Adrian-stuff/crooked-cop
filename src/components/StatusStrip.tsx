@@ -75,7 +75,7 @@ function EscapeMeter({ view }: { view: View }) {
   const known = heisters.filter((p) => p.carried !== null);
   return (
     <span className="chip gold" title="Artifacts taken, as announced after each Heister Phase">
-      <img src="/assets/artifact.png" alt="" width={16} height={16} />
+      <img src="/assets/icons/artifact.png" alt="" width={16} height={16} />
       {known.length
         ? known.map((p) => `${p.label} ${p.carried}`).join(' · ') + ` of ${need} needed`
         : <>Taken <strong key={view.announcedTaken} className="pop">{view.announcedTaken}</strong> of {view.settings.artifactCount} · escape needs {need}</>}

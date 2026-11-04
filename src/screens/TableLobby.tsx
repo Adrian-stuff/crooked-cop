@@ -8,6 +8,7 @@ import { SPECTATOR_IDENTITY, seatIdentities, tokenText } from '../game/identity'
 import { checkCards, type DealtRole, type TableGame } from '../net/useTableGame';
 import type { FacilitatorLink } from '../net/tableLink';
 import { DevicesPanel, TableTopBar } from './TableScreen';
+import { useMusic } from '../game/sound';
 
 const ROLE_OPTIONS: { value: DealtRole; label: string }[] = [
   { value: 'police', label: 'Officer' },
@@ -16,6 +17,7 @@ const ROLE_OPTIONS: { value: DealtRole; label: string }[] = [
 ];
 
 export function TableLobby({ table, view, link }: { table: TableGame; view: View; link: FacilitatorLink }) {
+  useMusic('lobby');
   const [name, setName] = useState('');
   const save = table.save!;
   const seated = view.players.filter((p) => !p.wantsSpectate);

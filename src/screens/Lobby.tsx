@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { heisterCountFor, MAX_PLAYERS, MIN_PLAYERS } from '../../shared/engine';
 import { EXIT_STATION, stationLabel } from '../../shared/map';
 import type { Settings, View } from '../../shared/types';
@@ -7,8 +8,10 @@ import { RulesSettings } from '../components/RulesSettings';
 import { TokenIcon } from '../components/Token';
 import { SPECTATOR_IDENTITY, seatIdentities, tokenText } from '../game/identity';
 import type { Game } from '../net/useGame';
+import { useMusic } from '../game/sound';
 
 export function Lobby({ game, view }: { game: Game; view: View }) {
+  useMusic('lobby');
   const me = view.players.find((p) => p.id === view.me)!;
   const ids = seatIdentities(view.players);
   const seated = view.players.filter((p) => !p.wantsSpectate);
@@ -17,6 +20,7 @@ export function Lobby({ game, view }: { game: Game; view: View }) {
   const canStart = n >= MIN_PLAYERS && n <= MAX_PLAYERS;
   const link = `${location.origin}${location.pathname}?room=${view.code}`;
   const set = (s: Partial<Settings>) => game.act({ type: 'settings', settings: s });
+
 
   return (
     <div className="app lobby-screen">

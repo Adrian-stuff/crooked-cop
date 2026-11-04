@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ClientMsg, ServerMsg } from '../../shared/protocol';
 import type { Action, ChatMessage, View } from '../../shared/types';
 
-const WS_URL = import.meta.env.VITE_WS_URL
+export const WS_URL = import.meta.env.VITE_WS_URL
   ?? `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 
 // Per-tab session, so several tabs in one browser can be different players.

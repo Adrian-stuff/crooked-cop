@@ -213,7 +213,7 @@ export function StationPopover({ view, station, ids, act, onClose, facilitator, 
         <div className="pop-facts">
           {artifacts > 0 && (
             <span className="pop-fact-pill artifact" title={`${artifacts} Artifacts here`}>
-              <img src="/assets/artifact.png" alt="" width={15} height={15} />
+              <img src="/assets/icons/artifact.png" alt="" width={15} height={15} />
               <strong>{artifacts}</strong> Artifact{artifacts > 1 ? 's' : ''}
             </span>
           )}

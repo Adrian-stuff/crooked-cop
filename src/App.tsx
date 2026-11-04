@@ -9,6 +9,8 @@ import { Lobby } from './screens/Lobby';
 import { CopsScreen } from './screens/CopsScreen';
 import { DisplayScreen } from './screens/DisplayScreen';
 import { TableApp } from './screens/TableScreen';
+import { MapEditorGate } from './editor/MapEditorGate';
+import { SoundControl } from './components/SoundControl';
 
 const useBackend = USE_SUPABASE ? useSupabaseGame : useGame;
 
@@ -16,8 +18,18 @@ const useBackend = USE_SUPABASE ? useSupabaseGame : useGame;
 const params = new URLSearchParams(location.search);
 const deviceCode = (key: string) => params.get(key)?.toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
 
-// Facilitator mode runs on this device; it only goes online if the facilitator connects other devices.
 export default function App() {
+  return (
+    <>
+      <Screens />
+      <SoundControl />
+      <MapEditorGate />
+    </>
+  );
+}
+
+// Facilitator mode runs on this device; it only goes online if the facilitator connects other devices.
+function Screens() {
   const [table, setTable] = useState(hasTableGame);
   const exitTable = useCallback(() => setTable(false), []);
   const display = deviceCode('display');

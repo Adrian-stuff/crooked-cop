@@ -132,8 +132,6 @@
 /* Cops device: one tablet passed around the Police team. */
 .cops-screen { min-height: 100%; }
 .cops-screen > .device-banner { margin: 10px 16px 0; }
-.cops-screen .topbar .cops-env-btn { margin-left: auto; }
-.cops-screen .topbar .cops-env-btn + .leave { margin-left: 0; }
 .cops-card {
   width: min(560px, calc(100% - 32px)); margin: 32px auto; display: flex; flex-direction: column; align-items: center; gap: 12px;
   text-align: center; padding: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
@@ -157,6 +155,7 @@
 .cops-whoami-text small { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
 .cops-busy { opacity: 0.55; pointer-events: none; }
 .cops-reveal { padding: 16px; display: grid; grid-template-columns: minmax(300px, 420px) minmax(0, 1fr); gap: 14px; align-items: start; }
+.cops-reveal.no-map { grid-template-columns: minmax(0, 480px); justify-content: center; }
 .cops-reveal-board { background: var(--board); overflow: hidden; }
 .cops-empty { padding: 14px; }
 .cops-empty p { margin: 0 0 6px; }
@@ -171,3 +170,19 @@
   .display-main, .cops-reveal { grid-template-columns: 1fr; }
   .display-facts { align-items: flex-start; }
 }
+.cops-pass { margin: 4px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--panel-2); color: var(--cream); font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+/* Information Phase: the card covers the entire screen (toasts still show above it). */
+.cops-card.cops-full {
+  position: fixed; inset: 0; z-index: 40; width: auto; margin: 0; border: 0; border-radius: 0;
+  justify-content: center; overflow-y: auto; padding: 32px 16px; gap: 18px;
+}
+.cops-card.cops-full h1 { font-size: clamp(40px, 7vw, 72px); }
+.cops-card.cops-full .cops-clock { font-size: clamp(48px, 9vw, 96px); }
+.cops-card.cops-full > .muted { font-size: 18px; max-width: 640px; }
+.cops-card.cops-full .cops-recap { max-width: 900px; }
+/* Waiting cards outside the Information Phase enlarge to full screen on click. */
+.cops-card.cops-toggle { cursor: zoom-in; user-select: none; }
+.cops-card.cops-toggle.cops-full { cursor: zoom-out; }
+.cops-card.cops-toggle:hover:not(.cops-full) { border-color: var(--muted); }
+.cops-card.cops-toggle:focus-visible { outline: 2px solid var(--search); outline-offset: 2px; }
+.cops-toggle-hint { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }

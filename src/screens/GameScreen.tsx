@@ -7,16 +7,17 @@ import { BoardLegend } from '../components/BoardLegend';
 import { BoardPanZoom } from '../components/BoardPanZoom';
 import { Chat } from '../components/Chat';
 import { Envelopes } from '../components/Envelopes';
-import { ArrestCard, Log, PhaseBanner, PlayerList, RevealCard, RoleReveal, TopBar } from '../components/Panels';
+import { ArrestCard, Log, PhaseBanner, PlayerList, RevealCard, RoleReveal, TopBar, useCountdown } from '../components/Panels';
 import { StatusStrip } from '../components/StatusStrip';
 import { StationPopover } from '../components/StationPopover';
 import { seatIdentities } from '../game/identity';
 import { channelKind, channelLabel, useRecentChat } from '../game/recentChat';
 import { useEnvelopeHighlight } from '../game/envelopeHighlight';
 import { useFullscreen } from '../game/useFullscreen';
-import { unlockSound, useTurnAlert } from '../game/turnAlert';
+import { useTurnAlert } from '../game/turnAlert';
 import { marksFor, type Mode } from '../game/selection';
 import type { Game } from '../net/useGame';
+import { setSoundSettings, useMusic, useSoundSettings, useTimeWarning } from '../game/sound';
 
 export function GameScreen({ game, view }: { game: Game; view: View }) {
   const boardWrapRef = useRef<HTMLDivElement>(null);
@@ -28,15 +29,10 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
   const [showNames, setShowNames] = useState(true);
   const [focus, setFocus] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
-  const [sound, setSound] = useState(() => {
-    try { return localStorage.getItem('cc-sound') === 'on'; } catch { return false; }
-  });
-  const toggleSound = (on: boolean) => {
-    if (on) unlockSound();
-    setSound(on);
-    try { localStorage.setItem('cc-sound', on ? 'on' : 'off'); } catch { /* private mode */ }
-  };
-  useTurnAlert(view, sound);
+  const { effects } = useSoundSettings();
+  useTurnAlert(view);
+  useMusic(view.phase === 'ended' ? 'lobby' : 'game', view.phase === 'info');
+  useTimeWarning(view.phase, useCountdown(view.deadline, game.clockOffset), false);
   // New chat pops up on the map: over the sender's pawn, or in a ticker if you can't see them.
   const recentChat = useRecentChat(game.chat, game.clockOffset);
   const onBoard = new Set(view.players.filter((p) => p.station && p.role !== 'spectator' && p.status !== 'escaped').map((p) => p.id));
@@ -97,7 +93,7 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
     <div className="app game-screen">
       {/* Everything needed to play fits in one screen; the players list and the log sit below it. */}
       <div className="game-fold">
-        <TopBar view={view} onLeave={game.leave} sound={sound} onSound={toggleSound} />
+        <TopBar view={view} onLeave={() => { stopAllBots(); game.leave(); }} sound={effects} onSound={(on) => setSoundSettings({ effects: on })} />
         <main className="game">
           <div className="board-col">
             <div ref={boardWrapRef} className={`board-wrap ${fullscreen ? 'is-fullscreen' : ''}`}>

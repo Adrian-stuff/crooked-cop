@@ -30,7 +30,7 @@ function saveSession(s: Session | null) {
   }
 }
 
-async function call<T = Record<string, unknown>>(body: Record<string, unknown>): Promise<T> {
+export async function call<T = Record<string, unknown>>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await sb().functions.invoke('game', { body });
   if (error) {
     // Game errors come back as HTTP 400 with { error }.

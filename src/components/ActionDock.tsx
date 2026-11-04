@@ -142,7 +142,7 @@ export function ActionDock({ view, mode, path, setMode, setPath, act, facilitato
   const moveCards = () => (
     <>
       <Card label="Move 1–2" kind="move" selected={mode === 'move'} onClick={() => pick('move')} />
-      <Card step={recharging ? 'Recharging' : pursuit ? 'Pursuit' : undefined} label="Express" icon="/assets/card-express.png" kind="express"
+      <Card step={recharging ? 'Recharging' : pursuit ? 'Pursuit' : undefined} label="Express" icon="/assets/cards/card-express.png" kind="express"
         selected={mode === 'express'} disabled={recharging} title={expressTitle} onClick={() => pick('express')} />
     </>
   );
@@ -195,7 +195,7 @@ export function ActionDock({ view, mode, path, setMode, setPath, act, facilitato
     if (view.myRole !== 'heister') return <Dock title="Heister Phase" sub="The Heisters are moving in secret. Plan your next move in Police chat." />;
     const carry = (
       <span className="carry-meter" title={`Escape through ${view.exits.map(stationLabel).join(' or ')}`}>
-        <img src="/assets/artifact.png" alt="" width={20} height={20} />
+        <img src="/assets/icons/artifact.png" alt="" width={20} height={20} />
         <strong>{me.carried ?? 0}</strong>/{escapeTarget(view.settings)}
       </span>
     );
@@ -264,10 +264,10 @@ export function ActionDock({ view, mode, path, setMode, setPath, act, facilitato
         {routing ? route : (
           <>
             {moveCards()}
-            <Card label="Search" kind="search" selected={mode === 'search'} title="Go to a nearby station and search it" onClick={() => pick('search')} />
-            <Card step={`${view.arrestsLeft} left`} label="Arrest" icon="/assets/card-arrest.png" kind="arrest" selected={mode === 'arrest'}
+            <Card label="Search" icon="/assets/cards/card-search.png" kind="search" selected={mode === 'search'} title="Go to a nearby station and search it" onClick={() => pick('search')} />
+            <Card step={`${view.arrestsLeft} left`} label="Arrest" icon="/assets/cards/card-arrest.png" kind="arrest" selected={mode === 'arrest'}
               disabled={noArrest} onClick={() => pick('arrest')} />
-            <Card step={ultimateStep} label="Ultimate" kind="ultimate" title={ultimateTitle}
+            <Card step={ultimateStep} label="Ultimate" icon="/assets/cards/card-ultimate.png" kind="ultimate" title={ultimateTitle}
               disabled={!view.ultimateUnlocked || me.ultimateUsed} onClick={() => { setMode(null); setPath([]); setScanning(true); }} />
             <button className="btn ghost" onClick={() => { setMode(null); act({ type: 'endTurn' }); }}>Pass</button>
           </>

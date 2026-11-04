@@ -8,6 +8,7 @@ import { Log, PhaseBanner, PlayerList, RevealCard, useCountdown } from '../compo
 import { seatIdentities } from '../game/identity';
 import { useTableDevice } from '../net/tableLink';
 import '../table.css';
+import { useMusic, useTimeWarning } from '../game/sound';
 
 const PHASE_NAME: Record<string, string> = {
   lobby: 'Getting ready', setup: 'Setup', heister: 'Heister Phase', police: 'Police Phase', info: 'Information Phase', ended: 'Case closed',
@@ -33,6 +34,9 @@ export function DisplayScreen({ code }: { code: string }) {
   const v = sync?.display;
   const secs = useCountdown(v?.deadline ?? null, offset);
   const ids = useMemo(() => seatIdentities(v?.players ?? []), [v?.players]);
+  // The table display is the shared speaker in facilitator mode.
+  useMusic(!v ? null : v.phase === 'lobby' || v.phase === 'ended' ? 'lobby' : 'game', v?.phase === 'info');
+  useTimeWarning(v?.phase ?? 'lobby', secs, sync?.paused != null);
 
   if (!v) {
     return (
@@ -65,7 +69,7 @@ export function DisplayScreen({ code }: { code: string }) {
         <div className="display-facts">
           {v.phase !== 'lobby' && v.phase !== 'setup' && (
             <span className="chip gold">
-              <img src="/assets/artifact.png" alt="" width={18} height={18} />
+              <img src="/assets/icons/artifact.png" alt="" width={18} height={18} />
               {v.announcedTaken} of {v.settings.artifactCount} taken · escape needs {escapeTarget(v.settings)}
             </span>
           )}

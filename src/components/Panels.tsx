@@ -5,6 +5,7 @@ import { ART } from '../game/art';
 import { SPECTATOR_IDENTITY, seatIdentities, tokenText, type Identity } from '../game/identity';
 import { actsThisPhase } from '../game/selection';
 import { TokenIcon } from './Token';
+import { playRoleSting } from '../game/sound';
 
 export function useCountdown(deadline: number | null, offset: number) {
   const [now, setNow] = useState(() => Date.now() + offset);
@@ -30,13 +31,13 @@ export function TopBar({ view, onLeave, sound, onSound }: TopBarProps) {
   return (
     <header className="topbar">
       <div className="brand">
-        <img src="/assets/logo-crooked-cop-128.png" alt="" width={36} height={36} />
+        <img src="/assets/brand/logo-crooked-cop-128.png" alt="" width={36} height={36} />
         <span>The Crooked Cop</span>
       </div>
       <div className="room">Room <strong>{view.code}</strong></div>
       {onSound && (
         <button className="btn ghost small sound-toggle" aria-pressed={!!sound} onClick={() => onSound(!sound)}
-          title="Play a sound when it's your move">
+          title="Sound effects: your-turn chime, timer warnings and role reveals">
           {sound ? 'Sound on' : 'Sound off'}
         </button>
       )}
@@ -258,25 +259,27 @@ export function Log({ view }: { view: View }) {
 
 const ROLE_COPY = {
   heister: {
-    img: '/assets/role-heister-01.png',
+    img: '/assets/roles/role-heister-01.png',
     title: 'You are a Heister',
     body: 'Everyone knows who you are, but not where you are. Grab at least half of the Artifacts and escape through an Exit Station before time runs out.',
   },
   traitor: {
-    img: '/assets/role-crooked-01.png',
+    img: '/assets/roles/role-crooked-01.png',
     title: 'You are the Crooked Cop',
     body: "Act like a loyal officer. After each turn you'll get a tip-off with the Heisters' exact locations. Feed the team believable lies and don't get voted out.",
   },
   police: {
-    img: '/assets/role-cop-01.png',
+    img: '/assets/roles/role-cop-01.png',
     title: 'You are a Cop',
     body: 'Track the Heisters with searches and clues, arrest both of them, and watch out: one of your fellow officers is lying to you.',
   },
 } as const;
 
 export function RoleReveal({ view, onClose }: { view: View; onClose: () => void }) {
-  if (view.myRole === 'spectator') return null;
-  const copy = ROLE_COPY[view.myRole];
+  const role = view.myRole;
+  useEffect(() => playRoleSting(role), [role]);
+  if (role === 'spectator') return null;
+  const copy = ROLE_COPY[role];
   const partner = view.myRole === 'heister' ? view.players.find((p) => p.role === 'heister' && p.id !== view.me) : null;
   return (
     <div className="modal-backdrop" onClick={onClose}>
