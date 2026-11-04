@@ -1,11 +1,13 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { EXIT_STATION, LINES, MAP_HEIGHT, MAP_WIDTH, STATIONS, STATION_BY_ID, linesAt, lineName, type LabelSide, searchArea } from '../../shared/map';
+import { EXIT_STATION, LINES, MAP_HEIGHT, MAP_WIDTH, STATIONS, STATION_BY_ID, linesAt, lineName, searchArea } from '../../shared/map';
 import type { ChatMessage, PublicPlayer, RoundAction, View } from '../../shared/types';
 import { channelKind } from '../game/recentChat';
 import { SPECTATOR_IDENTITY, seatIdentities, tokenText, type Identity } from '../game/identity';
 import { BOARD_PAD as PAD } from '../game/geometry';
 import { trackPoints } from '../game/route';
 import { TokenShape } from './Token';
+import { Rails } from './Rails';
+import { StationLabels } from './StationLabels';
 
 
 export type Mark = 'candidate' | 'path' | 'search' | 'arrest' | 'start';
@@ -26,37 +28,12 @@ interface Props {
   pings?: { id: string; station: string; by: string; name: string }[];
 }
 
-const LABEL_OFFSET: Record<LabelSide, [number, number, 'start' | 'middle' | 'end']> = {
-  n: [0, -26, 'middle'],
-  s: [0, 38, 'middle'],
-  e: [26, 6, 'start'],
-  w: [-26, 6, 'end'],
-  ne: [20, -22, 'start'],
-  nw: [-20, -22, 'end'],
-  se: [20, 34, 'start'],
-  sw: [-20, 34, 'end'],
-};
-
 function point(p: string | { x: number; y: number }) {
   return typeof p === 'string' ? STATION_BY_ID[p] : p;
 }
 
 const StaticMap = memo(function StaticMap() {
-  return (
-    <g>
-      {LINES.map((line) =>
-        line.segments.map((seg, i) => {
-          const pts = seg.map(point).map((p) => `${p.x},${p.y}`).join(' ');
-          return (
-            <g key={`${line.id}-${i}`}>
-              <polyline points={pts} fill="none" stroke={line.color} strokeOpacity={0.28} strokeWidth={30} strokeLinejoin="round" strokeLinecap="round" />
-              <polyline points={pts} fill="none" stroke={line.color} strokeWidth={15} strokeLinejoin="round" strokeLinecap="round" />
-            </g>
-          );
-        }),
-      )}
-    </g>
-  );
+  return <Rails lines={LINES} point={point} />;
 });
 
 const reduceMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -280,7 +257,7 @@ function ArtifactLayer({ artifacts }: { artifacts: Record<string, number> | null
         return (
           <g key={id} transform={`translate(${st.x + 18} ${st.y - 22})`}>
             <g className="artifact">
-              <image href="/assets/artifact.png" x={-15} y={-15} width={30} height={30} />
+              <image href="/assets/icons/artifact.png" x={-15} y={-15} width={30} height={30} />
               {n > 1 && <text key={n} x={14} y={-10} className="artifact-count">×{n}</text>}
             </g>
           </g>
@@ -291,7 +268,7 @@ function ArtifactLayer({ artifacts }: { artifacts: Record<string, number> | null
         return (
           <g key={key} transform={`translate(${st.x + 18} ${st.y - 22})`}>
             <circle r={18} className="artifact-glint" />
-            <image href="/assets/artifact.png" x={-15} y={-15} width={30} height={30} className="artifact-gone" />
+            <image href="/assets/icons/artifact.png" x={-15} y={-15} width={30} height={30} className="artifact-gone" />
           </g>
         );
       })}
@@ -379,7 +356,7 @@ export function Board({ view, marks = {}, onStation, showTrails, showNames = tru
         </radialGradient>
       </defs>
       <rect x={-PAD} width={MAP_WIDTH + PAD * 2} height={MAP_HEIGHT} fill="var(--board)" onClick={() => onPick?.(null)} />
-      <image href="/assets/logo-crooked-cop.png" x={690} y={250} width={580} height={580} opacity={0.07} preserveAspectRatio="xMidYMid meet" />
+      <image href="/assets/brand/logo-crooked-cop.png" x={690} y={250} width={580} height={580} opacity={0.07} preserveAspectRatio="xMidYMid meet" />
       <StaticMap />
 
       {trails && Object.entries(trails).map(([pid, steps]) => {
@@ -396,7 +373,6 @@ export function Board({ view, marks = {}, onStation, showTrails, showNames = tru
 
       {STATIONS.map((st) => {
         const mark = marks[st.id];
-        const [dx, dy, anchor] = LABEL_OFFSET[st.label];
         const clickable = (!!onStation && !!mark) || !!onPick;
         const occ = occupants[st.id]?.join(', ');
         return (
@@ -415,13 +391,13 @@ export function Board({ view, marks = {}, onStation, showTrails, showNames = tru
             ) : (
               <circle cx={st.x} cy={st.y} r={14} fill="#fff" stroke="#111" strokeWidth={4} />
             )}
-            <text x={st.x + dx * (st.major ? 1.15 : 1)} y={st.y + dy} textAnchor={anchor}
-              className={st.major ? 'st-label major' : 'st-label'}>{st.name.toUpperCase()}</text>
             <circle cx={st.x} cy={st.y} r={30} fill="transparent" />
             <title>{`${st.name} · ${linesAt(st.id).map(lineName).join(', ')} line${linesAt(st.id).length > 1 ? 's' : ''}${exits.includes(st.id) ? ' · EXIT STATION' : ''}${occ ? `\n${occ}` : ''}`}</title>
           </g>
         );
       })}
+
+      <StationLabels stations={STATIONS} />
 
       {view && <RoundMarks view={view} lastSeen={lastSeen} />}
       <ArtifactLayer artifacts={view?.artifacts ?? null} />

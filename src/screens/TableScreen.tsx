@@ -18,6 +18,7 @@ import { deviceUrl, useFacilitatorLink, type DeviceKind, type FacilitatorLink } 
 import { downloadRecord, useTableGame, type TableGame } from '../net/useTableGame';
 import { TableLobby } from './TableLobby';
 import '../table.css';
+import { useMusic, useTimeWarning } from '../game/sound';
 
 const PHASE_NAME: Record<string, string> = {
   lobby: 'Lobby', setup: 'Setup', heister: 'Heister Phase', police: 'Police Phase', info: 'Information Phase', ended: 'Case closed',
@@ -74,7 +75,7 @@ export function TableTopBar({ table }: { table: TableGame }) {
   return (
     <header className="topbar">
       <div className="brand">
-        <img src="/assets/logo-crooked-cop-128.png" alt="" width={36} height={36} />
+        <img src="/assets/brand/logo-crooked-cop-128.png" alt="" width={36} height={36} />
         <span>The Crooked Cop</span>
       </div>
       <span className="tag gold">Facilitator mode</span>
@@ -132,7 +133,7 @@ function PublicTimer({ table, view, onClose }: { table: TableGame; view: View; o
       {table.paused !== null && <div className="pt-note">Paused</div>}
       {view.phase !== 'setup' && (
         <div className="pt-taken">
-          <img src="/assets/artifact.png" alt="" width={28} height={28} />
+          <img src="/assets/icons/artifact.png" alt="" width={28} height={28} />
           {view.announcedTaken} of {view.settings.artifactCount} Artifacts taken · escape needs {escapeTarget(view.settings)}
         </div>
       )}
@@ -312,6 +313,8 @@ export function TableScreen({ table, view, link }: { table: TableGame; view: Vie
   const boardWrapRef = useRef<HTMLDivElement>(null);
   const { fullscreen, toggle: toggleFullscreen } = useFullscreen(boardWrapRef);
   const ids = useMemo(() => seatIdentities(view.players), [view.players]);
+  useMusic(view.phase === 'ended' ? 'lobby' : 'game', view.phase === 'info');
+  useTimeWarning(view.phase, useCountdown(view.deadline, 0), table.paused !== null);
   const waiting = useMemo(() => {
     const list = view.players.filter((p) => actsThisPhase(view.phase, p) && !p.done);
     return view.phase === 'setup' ? [...list].sort(setupOrder) : list;
@@ -430,7 +433,7 @@ export function TableScreen({ table, view, link }: { table: TableGame; view: Vie
                 </div>
               </BoardPanZoom>
               <div className="legend">
-                <span><img src="/assets/artifact.png" alt="" width={16} height={16} /> {artifactsLeft} Artifact{artifactsLeft === 1 ? '' : 's'} on the board</span>
+                <span><img src="/assets/icons/artifact.png" alt="" width={16} height={16} /> {artifactsLeft} Artifact{artifactsLeft === 1 ? '' : 's'} on the board</span>
                 {view.phase === 'setup' && (
                   <button className={`btn small ${editArtifacts ? 'selected' : ''}`} aria-pressed={editArtifacts}
                     onClick={() => { setEditArtifacts(!editArtifacts); setPicked(null); }}>

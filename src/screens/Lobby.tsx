@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { heisterCountFor, MAX_PLAYERS, MIN_PLAYERS } from '../../shared/engine';
 import { EXIT_STATION, stationLabel } from '../../shared/map';
 import type { Settings, View } from '../../shared/types';
@@ -6,9 +7,12 @@ import { TopBar } from '../components/Panels';
 import { RulesSettings } from '../components/RulesSettings';
 import { TokenIcon } from '../components/Token';
 import { SPECTATOR_IDENTITY, seatIdentities, tokenText } from '../game/identity';
+import { addBot, stopAllBots } from '../net/bots';
 import type { Game } from '../net/useGame';
+import { useMusic } from '../game/sound';
 
 export function Lobby({ game, view }: { game: Game; view: View }) {
+  useMusic('lobby');
   const me = view.players.find((p) => p.id === view.me)!;
   const ids = seatIdentities(view.players);
   const seated = view.players.filter((p) => !p.wantsSpectate);
@@ -17,10 +21,20 @@ export function Lobby({ game, view }: { game: Game; view: View }) {
   const canStart = n >= MIN_PLAYERS && n <= MAX_PLAYERS;
   const link = `${location.origin}${location.pathname}?room=${view.code}`;
   const set = (s: Partial<Settings>) => game.act({ type: 'settings', settings: s });
+  const leave = () => { stopAllBots(); game.leave(); };
+  const [botBusy, setBotBusy] = useState(false);
+  const [botError, setBotError] = useState<string | null>(null);
+  const addOne = () => {
+    setBotBusy(true);
+    setBotError(null);
+    addBot(view.code, view.players.map((p) => p.name))
+      .catch((e: Error) => setBotError(e.message))
+      .finally(() => setBotBusy(false));
+  };
 
   return (
     <div className="app lobby-screen">
-      <TopBar view={view} onLeave={game.leave} />
+      <TopBar view={view} onLeave={leave} />
       <main className="lobby">
         <section className="panel lobby-main">
           <div className="code-hero">
@@ -76,6 +90,13 @@ export function Lobby({ game, view }: { game: Game; view: View }) {
           {me.isHost ? (
             <button className="btn primary big chunky" disabled={!canStart} onClick={() => game.act({ type: 'start' })}>Deal roles &amp; start</button>
           ) : <p className="muted">Waiting for the host to start…</p>}
+          {me.isHost && (
+            <div className="bot-row">
+              <button className="btn ghost small" disabled={botBusy || n >= MAX_PLAYERS} onClick={addOne}>{botBusy ? 'Adding bot…' : 'Add bot'}</button>
+              <span className="muted">Bots play random legal moves from this tab, for testing.</span>
+              {botError && <span className="bot-error">{botError}</span>}
+            </div>
+          )}
         </section>
 
         <section className="panel settings">

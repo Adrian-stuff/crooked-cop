@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { View } from '../../shared/types';
+import { playChime } from './sound';
 
 // Whether the game is waiting on you right now.
 export function isMyMove(view: View): boolean {
@@ -15,72 +16,16 @@ export function isMyMove(view: View): boolean {
   }
 }
 
-let audio: AudioContext | null = null;
-
-// Call from a click so browsers allow sound later.
-export function unlockSound() {
-  try {
-    audio ??= new AudioContext();
-    void audio.resume();
-  } catch {
-    audio = null;
-  }
-}
-
-function chime() {
-  if (!audio) return;
-  try {
-    const t = audio.currentTime;
-    for (const [i, freq] of [660, 880].entries()) {
-      const osc = audio.createOscillator();
-      const gain = audio.createGain();
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.0001, t + i * 0.14);
-      gain.gain.exponentialRampToValueAtTime(0.18, t + i * 0.14 + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.14 + 0.22);
-      osc.connect(gain).connect(audio.destination);
-      osc.start(t + i * 0.14);
-      osc.stop(t + i * 0.14 + 0.25);
-    }
-  } catch {
-    // sound is a nicety; ignore failures
-  }
-}
-
-// A teammate pointing at a station: a quick rising "blip blip", louder than the turn chime.
-export function pingSound() {
-  if (!audio) return;
-  try {
-    const t = audio.currentTime;
-    for (const [i, freq] of [988, 1319, 988, 1319].entries()) {
-      const osc = audio.createOscillator();
-      const gain = audio.createGain();
-      osc.type = 'triangle';
-      osc.frequency.value = freq;
-      const at = t + i * 0.09;
-      gain.gain.setValueAtTime(0.0001, at);
-      gain.gain.exponentialRampToValueAtTime(0.25, at + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.08);
-      osc.connect(gain).connect(audio.destination);
-      osc.start(at);
-      osc.stop(at + 0.09);
-    }
-  } catch {
-    // sound is a nicety; ignore failures
-  }
-}
-
-// When your move comes up: chime (if sound is on), and flash the tab title while the tab is hidden.
-export function useTurnAlert(view: View, sound: boolean) {
+// When your move comes up: chime (if effects are on), and flash the tab title while the tab is hidden.
+export function useTurnAlert(view: View) {
   const mine = isMyMove(view);
   const was = useRef(mine);
 
   useEffect(() => {
     const started = mine && !was.current;
     was.current = mine;
-    if (!started) return;
-    if (sound) chime();
-  }, [mine, sound]);
+    if (started) playChime();
+  }, [mine]);
 
   useEffect(() => {
     if (!mine) return;

@@ -7,16 +7,18 @@ import { BoardLegend } from '../components/BoardLegend';
 import { BoardPanZoom } from '../components/BoardPanZoom';
 import { Chat } from '../components/Chat';
 import { Envelopes, MapEnvelope } from '../components/Envelopes';
-import { ArrestCard, Log, PhaseBanner, PlayerList, RevealCard, RoleReveal, TopBar } from '../components/Panels';
+import { ArrestCard, Log, PhaseBanner, PlayerList, RevealCard, RoleReveal, TopBar, useCountdown } from '../components/Panels';
 import { StatusStrip } from '../components/StatusStrip';
 import { StationPopover } from '../components/StationPopover';
 import { seatIdentities } from '../game/identity';
 import { channelKind, channelLabel, useRecentChat } from '../game/recentChat';
 import { useEnvelopeHighlight } from '../game/envelopeHighlight';
 import { useFullscreen } from '../game/useFullscreen';
-import { pingSound, unlockSound, useTurnAlert } from '../game/turnAlert';
+import { useTurnAlert } from '../game/turnAlert';
 import { marksFor, type Mode } from '../game/selection';
+import { stopAllBots } from '../net/bots';
 import type { Game } from '../net/useGame';
+import { playPing, setSoundSettings, useMusic, useSoundSettings, useTimeWarning } from '../game/sound';
 
 export function GameScreen({ game, view }: { game: Game; view: View }) {
   const boardWrapRef = useRef<HTMLDivElement>(null);
@@ -37,15 +39,10 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
   const [picked, setPicked] = useState<string | null>(null);
   const [closedEnvelope, setClosedEnvelope] = useState<string | null>(null);
   const latestSearch = view.envelopes.filter((e) => e.to === view.me && e.search && e.round === view.round).at(-1);
-  const [sound, setSound] = useState(() => {
-    try { return localStorage.getItem('cc-sound') === 'on'; } catch { return false; }
-  });
-  const toggleSound = (on: boolean) => {
-    if (on) unlockSound();
-    setSound(on);
-    try { localStorage.setItem('cc-sound', on ? 'on' : 'off'); } catch { /* private mode */ }
-  };
-  useTurnAlert(view, sound);
+  const { effects } = useSoundSettings();
+  useTurnAlert(view);
+  useMusic(view.phase === 'ended' ? 'lobby' : 'game', view.phase === 'info');
+  useTimeWarning(view.phase, useCountdown(view.deadline, game.clockOffset), false);
   // New chat pops up on the map: over the sender's pawn, or in a ticker if you can't see them.
   const recentChat = useRecentChat(game.chat, game.clockOffset);
   const onBoard = new Set(view.players.filter((p) => p.station && p.role !== 'spectator' && p.status !== 'escaped').map((p) => p.id));
@@ -66,13 +63,13 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
     }
     return list;
   }, [pingChat]);
-  // A new ping from a teammate plays a sound (when sound is on).
+  // A new ping from a teammate plays a sound (playPing stays quiet when effects are off).
   const heard = useRef(new Set<string>());
   useEffect(() => {
     const fresh = pings.filter((p) => !heard.current.has(p.id));
     for (const p of fresh) heard.current.add(p.id);
-    if (sound && fresh.some((p) => p.by !== view.me)) pingSound();
-  }, [pings, sound, view.me]);
+    if (fresh.some((p) => p.by !== view.me)) playPing();
+  }, [pings, view.me]);
 
   // Reset any half-built selection when the phase changes.
   useEffect(() => {
@@ -121,7 +118,7 @@ export function GameScreen({ game, view }: { game: Game; view: View }) {
     <div className="app game-screen">
       {/* Everything needed to play fits in one screen; the players list and the log sit below it. */}
       <div className="game-fold">
-        <TopBar view={view} onLeave={game.leave} sound={sound} onSound={toggleSound} />
+        <TopBar view={view} onLeave={() => { stopAllBots(); game.leave(); }} sound={effects} onSound={(on) => setSoundSettings({ effects: on })} />
         <main className="game">
           <div className="board-col">
             <div ref={boardWrapRef} className={`board-wrap ${fullscreen ? 'is-fullscreen' : ''}`}>
