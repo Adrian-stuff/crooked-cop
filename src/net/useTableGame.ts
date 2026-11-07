@@ -144,10 +144,17 @@ export function useTableGame() {
     return { ...view, me: id, myRole: p.role, godView: false };
   }, [view]);
 
+  // A seat's own private view, exactly as that player would see it online (dev impersonation).
+  const playerView = useCallback((id: string): View | null => {
+    if (!save || !save.state.players.some((p) => p.id === id)) return null;
+    return viewFor(save.state, id, Date.now());
+  }, [save]);
+
   return {
     save,
     view,
     viewAs,
+    playerView,
     error,
     clearError: () => setError(null),
     paused: save?.paused ?? null,

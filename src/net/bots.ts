@@ -6,7 +6,7 @@ import { botRunner, type BotRunner } from '../../shared/botBrain';
 import type { ClientMsg, ServerMsg } from '../../shared/protocol';
 import type { Action, View } from '../../shared/types';
 import { USE_SUPABASE } from './config';
-import { WS_URL } from './useGame';
+import { wsUrl } from './useGame';
 import { call } from './useSupabaseGame';
 
 const NAMES = ['Bot Dela Cruz', 'Bot Santos', 'Bot Reyes', 'Bot Bautista', 'Bot Garcia', 'Bot Mendoza', 'Bot Ramos'];
@@ -40,7 +40,7 @@ export function stopAllBots() {
 
 function addLocalBot(code: string, name: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(WS_URL);
+    const ws = new WebSocket(wsUrl());
     const send = (m: ClientMsg) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m)); };
     const run: BotRunner = botRunner((action: Action) => send({ t: 'action', action }));
     let joined = false;

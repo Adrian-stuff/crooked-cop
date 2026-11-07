@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ClientMsg, ServerMsg } from '../../shared/protocol';
 import type { Action, ChatMessage, View } from '../../shared/types';
 
-export const WS_URL = import.meta.env.VITE_WS_URL
+// Worked out on use, not at import, so modules that import this still load outside a browser (tests).
+export const wsUrl = () => import.meta.env.VITE_WS_URL
   ?? `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 
 // Per-tab session, so several tabs in one browser can be different players.
@@ -47,7 +48,7 @@ export function useGame(): Game {
 
     const open = () => {
       setConn('connecting');
-      const ws = new WebSocket(WS_URL);
+      const ws = new WebSocket(wsUrl());
       wsRef.current = ws;
       ws.onopen = () => {
         retry.current = 0;

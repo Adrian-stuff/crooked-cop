@@ -18,6 +18,8 @@ import { actsThisPhase, marksFor, type Mode } from '../game/selection';
 import { deviceUrl, useFacilitatorLink, type DeviceKind, type FacilitatorLink } from '../net/tableLink';
 import { downloadRecord, useTableGame, type TableGame } from '../net/useTableGame';
 import { TableLobby } from './TableLobby';
+import { GameScreen } from './GameScreen';
+import { DEV_IMPERSONATE, TableDevSeats, tableSeatGame } from '../components/DevImpersonate';
 import '../table.css';
 import { useMusic, useTimeWarning } from '../game/sound';
 
@@ -43,6 +45,9 @@ export function TableApp({ onExit }: { onExit: () => void }) {
   const table = useTableGame();
   const link = useFacilitatorLink(table);
   const { error, clearError } = table;
+  // Dev only: the seat being played in this tab instead of the facilitator screen.
+  const [playAs, setPlayAs] = useState<string | null>(null);
+  const seatView = DEV_IMPERSONATE && playAs ? table.playerView(playAs) : null;
 
   useEffect(() => {
     if (!table.save) onExit();
@@ -57,10 +62,13 @@ export function TableApp({ onExit }: { onExit: () => void }) {
   if (!table.view) return null;
   return (
     <>
-      {table.view.phase === 'lobby'
-        ? <TableLobby table={table} view={table.view} link={link} />
-        : <TableScreen table={table} view={table.view} link={link} />}
+      {seatView && playAs
+        ? <GameScreen key={playAs} game={tableSeatGame(table, seatView, playAs, () => setPlayAs(null))} view={seatView} />
+        : table.view.phase === 'lobby'
+          ? <TableLobby table={table} view={table.view} link={link} />
+          : <TableScreen table={table} view={table.view} link={link} />}
       {error && <div className="toast" role="alert" onClick={clearError}>{error}</div>}
+      {DEV_IMPERSONATE && <TableDevSeats table={table} playing={seatView ? playAs : null} onPlay={setPlayAs} />}
     </>
   );
 }

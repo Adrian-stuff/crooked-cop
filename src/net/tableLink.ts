@@ -144,7 +144,8 @@ export function useTableDevice(code: string, kind: DeviceKind) {
       if (s.rev <= rev.current) return;
       rev.current = s.rev;
       setSync(s);
-      setOffset(s.display.serverNow - Date.now());
+      const skew = s.display.serverNow - Date.now();
+      if (Number.isFinite(skew)) setOffset(skew); // an older facilitator build may not send serverNow
     })
       .on('broadcast', { event: 'result' }, ({ payload }) => {
         const { id, error } = payload as ResultMsg;

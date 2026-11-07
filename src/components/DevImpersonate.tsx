@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import type { View } from '../../shared/types';
 import type { ClientMsg, DevRoom, ServerMsg } from '../../shared/protocol';
 import { USE_SUPABASE } from '../net/config';
-import { WS_URL, loadSession, type Session } from '../net/useGame';
+import { wsUrl, loadSession, type Game, type Session } from '../net/useGame';
+import type { TableGame } from '../net/useTableGame';
 
 // Local dev only: on with VITE_DEV_IMPERSONATE=1 in .env.development.local. Local rooms go through the dev game
 // server, which refuses anyone not on this machine. Online rooms go through a relay in the Vite dev server that
@@ -61,7 +63,7 @@ export function DevImpersonate({ me, onSwitch }: { me?: string; onSwitch: (s: Se
       relay<{ rooms: DevRoom[] }>({ op: 'devRooms' }).then((r) => setRooms(r.rooms)).catch((e) => setError(e.message));
       return;
     }
-    const ws = new WebSocket(WS_URL);
+    const ws = new WebSocket(wsUrl());
     wsRef.current = ws;
     const send = (m: ClientMsg) => ws.send(JSON.stringify(m));
     ws.onopen = () => send({ t: 'devRooms' });
@@ -132,4 +134,44 @@ export function DevImpersonate({ me, onSwitch }: { me?: string; onSwitch: (s: Se
       </button>
     </div>
   );
+}
+
+// Facilitator mode: the game lives on this device, so any seat can be played right here. Lists the seats;
+// picking one plays it in this tab (see tableSeatGame), and "Facilitator" goes back.
+export function TableDevSeats({ table, playing, onPlay }: { table: TableGame; playing: string | null; onPlay: (id: string | null) => void }) {
+  const [open, setOpen] = useState(false);
+  const state = table.save?.state;
+  if (!state || state.phase === 'lobby') return null;
+  const seats = state.players.filter((p) => p.role !== 'spectator');
+  return (
+    <div className="dev-imp">
+      {open && (
+        <section className="dev-imp-panel" aria-label="Dev: play as a seat">
+          <header><strong>Dev · play as (facilitator game)</strong></header>
+          <p className="muted small">Plays that seat's private screen in this tab. The game itself stays on this device.</p>
+          <button className={`dev-imp-player ${playing === null ? 'me' : ''}`} disabled={playing === null} onClick={() => onPlay(null)}>
+            <span className="dev-imp-name">Facilitator{playing === null && ' (you)'}</span>
+          </button>
+          {seats.map((p) => (
+            <button key={p.id} className={`dev-imp-player ${p.id === playing ? 'me' : ''}`} disabled={p.id === playing} onClick={() => onPlay(p.id)}>
+              <span className="dev-imp-name">{p.name}{p.id === playing && ' (you)'}</span>
+              <span className={`dev-imp-role ${p.role}`}>{p.label ? `${p.label} ` : ''}{ROLE[p.role] ?? p.role}</span>
+              <span className="muted small">{p.status !== 'active' ? p.status : ''}</span>
+            </button>
+          ))}
+        </section>
+      )}
+      <button className="dev-imp-toggle" onClick={() => setOpen(!open)} aria-expanded={open} title="Local dev only: play any seat">DEV</button>
+    </div>
+  );
+}
+
+// The online game screen's interface, backed by the facilitator's game and acting as one seat.
+export function tableSeatGame(table: TableGame, view: View, id: string, onExit: () => void): Game {
+  const noop = () => {};
+  return {
+    conn: 'open', view, chat: [], error: table.error, clearError: table.clearError, clockOffset: 0, resuming: false,
+    create: noop, join: noop, leave: onExit, kick: noop, swap: noop, switchSession: noop, say: noop,
+    act: (a) => table.actAs(id, a),
+  };
 }
