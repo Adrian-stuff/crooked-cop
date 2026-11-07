@@ -14,7 +14,9 @@
     "bots": "tsx server/bots.ts",
     "dev:online": "VITE_BACKEND=supabase vite --host",
     "deploy:fn": "node scripts/sync-function.mjs && supabase functions deploy game --project-ref hxoubdwmvrecptxzrzzp --no-verify-jwt --use-api",
-    "bots:online": "BOTS_ONLINE=1 tsx server/bots.ts"
+    "bots:online": "BOTS_ONLINE=1 tsx server/bots.ts",
+    "serve:lan": "bash scripts/serve-lan.sh",
+    "serve:lan:win": "scripts\\serve-lan.cmd"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
