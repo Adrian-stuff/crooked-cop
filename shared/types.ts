@@ -41,7 +41,8 @@ export interface Player {
   station: string | null;
   carried: number;
   done: boolean; // finished the current phase
-  skipPoliceRound?: number; // wrong-arrest penalty
+  skipPoliceRound?: number; // wrong-arrest or wrongly-accused penalty
+  skipReason?: 'arrest' | 'accused';
   noArrestRound?: number; // wrongly-accused penalty
   moved: boolean;
   acted: 'search' | 'arrest' | 'ultimate' | null;
@@ -205,6 +206,7 @@ export interface PublicPlayer {
   carried: number | null;
   done: boolean;
   skipsPolice: boolean;
+  skipReason: 'arrest' | 'accused' | null;
   cannotArrest: boolean;
   moved: boolean;
   acted: 'search' | 'arrest' | 'ultimate' | null;

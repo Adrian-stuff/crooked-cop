@@ -100,7 +100,7 @@ numbers can be changed in the lobby.
   offline officer's next Police turn is cut to 15 seconds. Taking any action clears it.
 - **Accusation**: during the Information Phase any officer can call one vote per round. It passes with a strict
   majority of active officers (the accused votes too). If correct, the Crooked Cop is removed. If wrong, the
-  accused can't arrest next round.
+  accused sits out the next Police Phase (no turn at all).
 - **Artifacts**: 10, placed at random each game, never on an Exit Station. Arrested Heisters drop their
   Artifacts at the station where they were caught.
 - **Player counts**: 4–5 players → 1 Heister. 6–7 → 2 (the host can pick 1). 8 → 2. One officer is always the

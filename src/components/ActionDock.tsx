@@ -240,7 +240,7 @@ export function ActionDock({ view, mode, path, setMode, setPath, act, facilitato
   if (view.phase === 'police') {
     if (!officer) return <Dock title="Police Phase" sub="Officers are moving, searching and arresting. Watch the board." />;
     if (me.done) {
-      return <Dock title="Police Phase" sub={me.skipsPolice ? 'You sit out this phase (wrong arrest last round).' : 'Your turn is done. Waiting for the other officers…'} />;
+      return <Dock title="Police Phase" sub={me.skipsPolice ? `You sit out this phase (${me.skipReason === 'accused' ? 'wrongly accused last round' : 'wrong arrest last round'}).` : 'Your turn is done. Waiting for the other officers…'} />;
     }
     if (view.policeTurn !== me.id) {
       const up = view.players.find((p) => p.id === view.policeTurn);
@@ -391,7 +391,7 @@ export function ActionDock({ view, mode, path, setMode, setPath, act, facilitato
     const chosen = suspects.find((p) => p.id === accuseTarget);
     return (
       <Dock title="Who is the Crooked Cop?"
-        sub="Put one officer to a vote. One vote per round; if they're innocent they can't arrest next round.">
+        sub="Put one officer to a vote. One vote per round; if they're innocent they sit out the next Police Phase.">
         <div className="suspects">
           {suspects.map((p) => (
             <button key={p.id} className={`suspect ${accuseTarget === p.id ? 'selected' : ''}`} aria-pressed={accuseTarget === p.id}

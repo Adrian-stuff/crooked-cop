@@ -15,6 +15,7 @@ function makePlayer(partial: Partial<PublicPlayer> & { id: string; name: string;
     isHost: false,
     wantsSpectate: false,
     skipsPolice: false,
+    skipReason: null,
     cannotArrest: false,
     moved: false,
     acted: null,

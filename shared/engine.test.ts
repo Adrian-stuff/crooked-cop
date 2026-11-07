@@ -229,7 +229,7 @@ describe('game flow', () => {
     expect(cv.envelopes.some((e) => e.kind === 'traitor')).toBe(false);
   });
 
-  it('majority vote exposes the traitor; wrong accusation blocks arrests', () => {
+  it('majority vote exposes the traitor; wrong accusation skips the next police turn', () => {
     let g = setup(6);
     const traitor = byRole(g, 'traitor')[0];
     const cops = byRole(g, 'police');
@@ -244,9 +244,17 @@ describe('game flow', () => {
     g = act(g, cops[0].id, { type: 'accuse', target: cops[1].id }, t);
     g = act(g, cops[2].id, { type: 'vote', yes: true }, t);
     g = act(g, traitor.id, { type: 'vote', yes: true }, t);
-    expect(g.players.find((p) => p.id === cops[1].id)!.noArrestRound).toBe(2);
+    expect(g.players.find((p) => p.id === cops[1].id)!.skipPoliceRound).toBe(2);
     expect(viewFor(g, traitor.id, t).reveal).toMatchObject({ target: cops[1].id, guilty: false });
     expect(viewFor(g, traitor.id, t).players.find((p) => p.id === cops[1].id)!.cleared).toBe(true);
+    // The wrongly accused officer gets no turn in round 2's Police Phase.
+    while (!(g.phase === 'police' && g.round === 2)) g = act(g, traitor.id, { type: 'tick' }, (t += 61_000));
+    const accused = g.players.find((p) => p.id === cops[1].id)!;
+    expect(accused.done).toBe(true);
+    expect(viewFor(g, cops[1].id, t).players.find((p) => p.id === cops[1].id)).toMatchObject({ skipsPolice: true, skipReason: 'accused' });
+    const turns = new Set<string>();
+    while (g.phase === 'police') { if (g.policeTurn) turns.add(g.policeTurn); g = act(g, traitor.id, { type: 'tick' }, (t += 61_000)); }
+    expect(turns.has(cops[1].id)).toBe(false);
     // Next round: correct accusation
     untilInfo(2);
     g = act(g, cops[0].id, { type: 'accuse', target: traitor.id }, t);

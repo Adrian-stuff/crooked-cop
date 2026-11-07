@@ -224,7 +224,7 @@ function startGame(g: GameState, t: number) {
     if (p.wantsSpectate) p.role = 'spectator';
     Object.assign(p, {
       status: 'active', station: null, carried: 0, done: false, moved: false, acted: null,
-      envelopeGiven: false, skipPoliceRound: undefined, noArrestRound: undefined, cleared: false, expressRound: undefined, afk: false,
+      envelopeGiven: false, skipPoliceRound: undefined, skipReason: undefined, noArrestRound: undefined, cleared: false, expressRound: undefined, afk: false,
       ultimateUsed: false, stealthUsed: false, stealthUntil: undefined, sabotageUsed: false, jammedUntil: undefined,
     });
   }
@@ -329,7 +329,7 @@ function endHeisterPhase(g: GameState, t: number) {
     p.envelopeGiven = false;
     const skipping = p.skipPoliceRound === g.round;
     p.done = !(isPolice(p) && p.status === 'active') || skipping;
-    if (isPolice(p) && p.status === 'active' && skipping) log(g, 'info', `${p.name} sits out this Police Phase (wrong arrest).`);
+    if (isPolice(p) && p.status === 'active' && skipping) log(g, 'info', `${p.name} sits out this Police Phase (${p.skipReason === 'accused' ? 'wrongly accused' : 'wrong arrest'}).`);
   }
   for (const ex of g.exitMustClear) log(g, 'info', `Exit rule: ${stationLabel(ex)} must be empty of officers at the end of this round.`);
   log(g, 'info', `Police Phase: officers take turns, one action each: Move, Express, Search${g.ultimateUnlocked ? ', Arrest or Ultimate' : ' or Arrest'}.`);
@@ -706,6 +706,7 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
         if (g.phase === 'ended') break;
       } else {
         me.skipPoliceRound = g.round + 1;
+        me.skipReason = 'arrest';
         log(g, 'fail', `${me.name}'s arrest at ${stationLabel(target)} failed. The station was empty. ${me.name} skips next Police Phase.`);
       }
       finishPoliceTurn(g, me);
@@ -853,8 +854,9 @@ function resolveAccusation(g: GameState, t: number, timedOut: boolean) {
       for (const p of g.players) p.jammedUntil = undefined; // their sabotage dies with them
       log(g, 'expose', `Vote passed ${yes}-${no}. ${target.name} WAS the Crooked Cop and is removed from the game.`);
     } else {
-      target.noArrestRound = g.round + 1;
-      log(g, 'fail', `Vote passed ${yes}-${no}, but ${target.name} is innocent. They cannot arrest next round.`);
+      target.skipPoliceRound = g.round + 1;
+      target.skipReason = 'accused';
+      log(g, 'fail', `Vote passed ${yes}-${no}, but ${target.name} is innocent. ${target.name} skips next Police Phase.`);
     }
   } else if (no > voters.length - needed || timedOut) {
     g.accusation = null;
@@ -942,6 +944,7 @@ export function viewFor(state: GameState, viewerId: string, t: number): View {
       carried: p.role === 'heister' ? (godView || heisterTeam ? p.carried : null) : null,
       done: p.done,
       skipsPolice: p.skipPoliceRound === g.round,
+      skipReason: p.skipPoliceRound === g.round ? p.skipReason ?? 'arrest' : null,
       cannotArrest: p.noArrestRound === g.round,
       moved: p.moved,
       acted: p.acted,
