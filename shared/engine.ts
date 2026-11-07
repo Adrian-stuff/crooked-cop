@@ -242,6 +242,8 @@ function startGame(g: GameState, t: number) {
   });
   g.phase = 'setup';
   g.deadline = t + g.settings.setupSeconds * 1000;
+  g.startedAt = t;
+  g.endedAt = null;
   const heisterNames = g.players.filter((p) => p.role === 'heister').map(heisterTag).join(' and ');
   log(g, 'announce', `The heist is on. ${heisterNames} ${nHeisters > 1 ? 'are' : 'is'} the Heister${nHeisters > 1 ? 's' : ''}. One officer is crooked.`);
   log(g, 'info', 'Setup: everyone picks a starting station and can change it until they lock in. Only the Police team sees officer picks, and Heisters pick in secret.');
@@ -834,7 +836,14 @@ export function applyAction(state: GameState, playerId: string, action: Action, 
     default:
       fail('Unknown action.');
   }
+  stampEnd(g, t);
   return g;
+}
+
+// The game clock stops when the game ends; a rematch resets it.
+function stampEnd(g: GameState, t: number) {
+  if (g.phase === 'ended') g.endedAt ??= t;
+  else if (g.phase === 'lobby') g.startedAt = g.endedAt = null;
 }
 
 function resolveAccusation(g: GameState, t: number, timedOut: boolean) {
@@ -902,6 +911,7 @@ export function advanceTime(g: GameState, t: number) {
         g.deadline = null;
     }
   }
+  stampEnd(g, t);
 }
 
 // Chatting counts as being back at the table.
@@ -962,7 +972,7 @@ export function viewFor(state: GameState, viewerId: string, t: number): View {
   });
 
   return {
-    code: g.code, me: viewerId, myRole, godView, settings: g.settings, phase: g.phase, round: g.round,
+    code: g.code, startedAt: g.startedAt ?? null, endedAt: g.endedAt ?? null, me: viewerId, myRole, godView, settings: g.settings, phase: g.phase, round: g.round,
     deadline: g.deadline, serverNow: t, players,
     artifacts: godView || heisterTeam ? g.artifacts : null,
     announcedTaken: g.announcedTaken,

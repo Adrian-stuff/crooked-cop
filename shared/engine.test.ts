@@ -848,3 +848,19 @@ describe('round actions', () => {
     expect(g.roundActions).toEqual([]);
   });
 });
+
+describe('game clock', () => {
+  it('records when the game started and stops when it ends', () => {
+    let g = setup(4);
+    expect(g.startedAt).toBe(T0);
+    expect(g.endedAt).toBeNull();
+    expect(viewFor(g, 'p1', T0).startedAt).toBe(T0);
+    g = placeAll(g);
+    let t = T0;
+    while (g.phase !== 'ended') g = act(g, 'p0', { type: 'tick' }, (t += 61_000));
+    expect(g.endedAt).toBeGreaterThan(T0);
+    const ended = g.endedAt;
+    g = act(g, 'p0', { type: 'tick' }, t + 600_000);
+    expect(g.endedAt).toBe(ended);
+  });
+});

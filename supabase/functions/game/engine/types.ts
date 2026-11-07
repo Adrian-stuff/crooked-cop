@@ -146,6 +146,8 @@ export interface Visit {
 
 export interface GameState {
   code: string;
+  startedAt?: number | null; // when the host started this game (ms)
+  endedAt?: number | null; // when it ended, so the elapsed time stops
   rng: number;
   settings: Settings;
   phase: Phase;
@@ -224,6 +226,8 @@ export interface PublicPlayer {
 export interface View {
   rev?: number; // room version; clients ignore views older than the one they have
   code: string;
+  startedAt: number | null;
+  endedAt: number | null;
   me: string;
   myRole: Role;
   godView: boolean;

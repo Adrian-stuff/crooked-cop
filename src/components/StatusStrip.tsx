@@ -5,6 +5,7 @@ import { SPECTATOR_IDENTITY, tokenText, type Identity } from '../game/identity';
 import { phaseSeconds } from '../game/phaseSeconds';
 import { actsThisPhase } from '../game/selection';
 import { useCountdown } from './Panels';
+import { ElapsedChip } from './GameClock';
 import { TokenIcon } from './Token';
 
 const PHASE_NAME: Record<string, string> = {
@@ -122,6 +123,7 @@ export function StatusStrip({ view, offset, ids }: { view: View; offset: number;
       {view.phase !== 'setup' && (
         <div className="strip-row second">
           <RoundTrack view={view} />
+          <ElapsedChip view={view} offset={offset} />
           <EscapeMeter view={view} />
           <TeamChips view={view} />
         </div>

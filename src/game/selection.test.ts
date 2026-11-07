@@ -34,6 +34,8 @@ function makeView(role: 'heister' | 'police' | 'traitor', artifacts: Record<stri
   const me = makePlayer({ id: 'p1', name: 'Player 1', role });
   return {
     code: 'TEST',
+    startedAt: null,
+    endedAt: null,
     serverNow: 0,
     arrestsLeft: 3,
     me: 'p1',

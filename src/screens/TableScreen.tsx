@@ -8,6 +8,7 @@ import { BoardPanZoom } from '../components/BoardPanZoom';
 import { Envelopes } from '../components/Envelopes';
 import { Log, PhaseBanner, PlayerList, RevealCard, useCountdown } from '../components/Panels';
 import { StationPopover } from '../components/StationPopover';
+import { ElapsedChip } from '../components/GameClock';
 import { StatusStrip } from '../components/StatusStrip';
 import { TokenIcon } from '../components/Token';
 import { useEnvelopeHighlight } from '../game/envelopeHighlight';
@@ -126,7 +127,7 @@ function PublicTimer({ table, view, onClose }: { table: TableGame; view: View; o
 
   return (
     <div className={`public-timer phase-bg-${view.phase}`} onClick={onClose} role="dialog" aria-label="Table timer">
-      <div className="pt-round">Round {Math.max(view.round, 0)} of {view.settings.maxRounds}</div>
+      <div className="pt-round">Round {Math.max(view.round, 0)} of {view.settings.maxRounds} · <ElapsedChip view={view} className="pt-elapsed" /></div>
       <div className="pt-phase">{PHASE_NAME[view.phase]}</div>
       {up && <div className="pt-up">{up.name}'s turn</div>}
       <div className={`pt-clock ${table.paused !== null ? 'paused' : secs !== null && secs <= 10 ? 'urgent' : ''}`}>{shown || '—'}</div>

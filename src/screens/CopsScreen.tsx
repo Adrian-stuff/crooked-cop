@@ -7,6 +7,7 @@ import { BoardPanZoom } from '../components/BoardPanZoom';
 import { Envelopes } from '../components/Envelopes';
 import { Log, PlayerList, useCountdown } from '../components/Panels';
 import { StationPopover } from '../components/StationPopover';
+import { ElapsedChip } from '../components/GameClock';
 import { StatusStrip } from '../components/StatusStrip';
 import { TokenIcon } from '../components/Token';
 import { useEnvelopeHighlight } from '../game/envelopeHighlight';
@@ -307,7 +308,10 @@ function Idle({ base, offset, paused }: { base: View; offset: number; paused: nu
         onClick: toggle,
         onKeyDown: (e: React.KeyboardEvent) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), toggle()),
       })}>
-      <span className="pt-round">{base.phase === 'lobby' ? 'Facilitator mode' : `Round ${base.round} of ${base.settings.maxRounds}`}</span>
+      <span className="pt-round">
+        {base.phase === 'lobby' ? 'Facilitator mode' : `Round ${base.round} of ${base.settings.maxRounds}`}
+        {base.phase !== 'lobby' && <> · <ElapsedChip view={base} offset={offset} className="pt-elapsed" /></>}
+      </span>
       <h1>{base.phase === 'ended' ? (base.winner === 'heisters' ? 'The Heisters got away' : 'Case closed') : PHASE_NAME[base.phase]}</h1>
       <Countdown view={base} offset={offset} paused={paused} />
       <p className="muted">{waitText[base.phase]}</p>

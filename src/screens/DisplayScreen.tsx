@@ -6,6 +6,7 @@ import { RoundRecap } from '../components/ActionDock';
 import { RoundTrack } from '../components/StatusStrip';
 import { phaseSeconds } from '../game/phaseSeconds';
 import { Board } from '../components/Board';
+import { ElapsedChip } from '../components/GameClock';
 import { Log, PhaseBanner, PlayerList, RevealCard, useCountdown } from '../components/Panels';
 import { seatIdentities } from '../game/identity';
 import { useTableDevice } from '../net/tableLink';
@@ -82,6 +83,7 @@ export function DisplayScreen({ code }: { code: string }) {
               {v.announcedTaken} of {v.settings.artifactCount} taken · escape needs {escapeTarget(v.settings)}
             </span>
           )}
+          {v.phase !== 'lobby' && <ElapsedChip view={v} offset={offset} />}
           {v.phase !== 'lobby' && <span className="chip">Exit{v.exits.length > 1 ? 's' : ''}: {v.exits.map(stationLabel).join(', ')}</span>}
           {v.exitMustClear.map((ex) => <span key={ex} className="chip danger">Clear {stationLabel(ex)} this round</span>)}
           <button className="btn ghost small" onClick={fullscreen}>Full screen</button>
