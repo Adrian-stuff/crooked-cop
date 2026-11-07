@@ -3,6 +3,8 @@ import { escapeTarget } from '../../shared/engine';
 import { stationLabel } from '../../shared/map';
 import type { View } from '../../shared/types';
 import { RoundRecap } from '../components/ActionDock';
+import { RoundTrack } from '../components/StatusStrip';
+import { phaseSeconds } from '../game/phaseSeconds';
 import { Board } from '../components/Board';
 import { Log, PhaseBanner, PlayerList, RevealCard, useCountdown } from '../components/Panels';
 import { seatIdentities } from '../game/identity';
@@ -50,19 +52,26 @@ export function DisplayScreen({ code }: { code: string }) {
   const paused = sync.paused;
   const shown = paused !== null ? clock(Math.ceil(paused / 1000)) : secs === null ? '' : clock(secs);
   const seated = { ...v, players: v.players.filter((p) => p.role !== 'spectator') };
+  const total = phaseSeconds(v);
+  const leftSecs = paused !== null ? Math.ceil(paused / 1000) : secs;
+  const left = leftSecs !== null && total ? Math.min(1, leftSecs / total) : null;
+  const urgent = paused === null && secs !== null && secs <= 10;
   const fullscreen = () => document.documentElement.requestFullscreen?.().catch(() => {});
 
   return (
     <div className={`display-screen phase-bg-${v.phase}`}>
       <header className="display-head">
         <div className="display-phase">
-          <span className="pt-round">{v.phase === 'lobby' ? 'Facilitator mode' : `Round ${Math.max(v.round, 0)} of ${v.settings.maxRounds}`}</span>
+          <span className="pt-round">{v.phase === 'setup' ? `Setup · ${v.settings.maxRounds} rounds` : 'Facilitator mode'}</span>
           <strong>{v.phase === 'ended' ? (v.winner === 'heisters' ? 'The Heisters got away' : 'Case closed') : PHASE_NAME[v.phase]}</strong>
           <span className="display-now">{nowLine(v)}</span>
+          {v.phase !== 'lobby' && v.phase !== 'setup' && <div className="display-rounds"><RoundTrack view={v} /></div>}
         </div>
         {v.phase !== 'ended' && v.phase !== 'lobby' && (
-          <div className={`display-clock ${paused !== null ? 'paused' : secs !== null && secs <= 10 ? 'urgent' : ''}`}>
+          <div className={`display-clock ${paused !== null ? 'paused' : urgent ? 'urgent' : ''}`}>
             {shown || '—'}
+            {total > 0 && <span className="display-total">of {clock(total)}</span>}
+            {left !== null && <span className="timer-bar display-timer-bar"><i style={{ width: `${left * 100}%` }} className={urgent ? 'urgent' : ''} /></span>}
             {paused !== null && <small>Paused</small>}
           </div>
         )}

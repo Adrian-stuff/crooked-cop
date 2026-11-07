@@ -1,7 +1,8 @@
-import { AFK_TURN_SECONDS, escapeTarget } from '../../shared/engine';
+import { escapeTarget } from '../../shared/engine';
 import { stationLabel } from '../../shared/map';
 import type { PublicPlayer, View } from '../../shared/types';
 import { SPECTATOR_IDENTITY, tokenText, type Identity } from '../game/identity';
+import { phaseSeconds } from '../game/phaseSeconds';
 import { actsThisPhase } from '../game/selection';
 import { useCountdown } from './Panels';
 import { TokenIcon } from './Token';
@@ -12,21 +13,6 @@ const PHASE_NAME: Record<string, string> = {
 
 const isOfficer = (role: string) => role === 'police' || role === 'traitor';
 const ordinal = (n: number) => `${n}${n === 2 ? 'nd' : n === 3 ? 'rd' : 'th'}`;
-
-// How long the current timer started at, for the progress bar.
-function phaseSeconds(view: View): number {
-  const s = view.settings;
-  switch (view.phase) {
-    case 'setup': return s.setupSeconds;
-    case 'heister': return s.heisterSeconds;
-    case 'police': {
-      const cur = view.players.find((p) => p.id === view.policeTurn);
-      return cur && (cur.afk || !cur.connected) ? Math.min(AFK_TURN_SECONDS, s.policeSeconds) : s.policeSeconds;
-    }
-    case 'info': return view.accusation ? Math.max(s.infoSeconds, 20) : s.infoSeconds;
-    default: return 0;
-  }
-}
 
 function Queue({ view, ids, waiting }: { view: View; ids: Record<string, Identity>; waiting: PublicPlayer[] }) {
   if (!waiting.length) return view.phase === 'ended' ? null : <span className="queue muted">Everyone is done</span>;
@@ -52,7 +38,7 @@ function Queue({ view, ids, waiting }: { view: View; ids: Record<string, Identit
   );
 }
 
-function RoundTrack({ view }: { view: View }) {
+export function RoundTrack({ view }: { view: View }) {
   const max = view.settings.maxRounds;
   const round = Math.max(view.round, 0);
   return (

@@ -112,12 +112,18 @@
 .display-screen.phase-bg-info { background: radial-gradient(ellipse at 50% 0%, #3f7d4f33, transparent 55%), var(--bg); }
 .display-head { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
 .display-phase { display: flex; flex-direction: column; flex: 1 1 320px; min-width: 0; }
-.display-phase strong { font-family: var(--display); font-weight: 400; font-size: clamp(32px, 4.5vw, 64px); line-height: 1; color: var(--cream); }
+.display-phase > strong { font-family: var(--display); font-weight: 400; font-size: clamp(32px, 4.5vw, 64px); line-height: 1; color: var(--cream); }
 .display-now { font-size: clamp(15px, 1.6vw, 22px); color: var(--gold); margin-top: 6px; }
 .display-clock { font-family: var(--display); font-size: clamp(64px, 9vw, 140px); line-height: 1; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; align-items: center; }
 .display-clock small { font: 600 14px var(--ui); letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); }
 .display-clock.urgent { color: #ff6b6b; animation: pulse 1s infinite; }
 .display-clock.paused { color: var(--muted); }
+.display-total { font: 600 clamp(14px, 1.4vw, 20px) var(--ui); color: var(--muted); letter-spacing: 0.05em; margin-top: 4px; }
+.display-timer-bar { width: 100%; min-width: 160px; height: 6px; margin-top: 8px; }
+.display-rounds { display: flex; margin-top: 12px; max-width: 520px; }
+.display-rounds .round-label { font-size: 18px; white-space: nowrap; }
+.display-rounds .round-label strong { font-size: 26px; }
+.display-rounds .pips i { height: 12px; }
 .display-facts { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 .display-facts .chip { font-size: 15px; padding: 6px 12px; }
 .display-main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 380px); gap: 14px; align-items: start; }
