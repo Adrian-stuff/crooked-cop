@@ -216,6 +216,20 @@ export function useTableGame() {
 
     // An action sent from the cops device. Only the officer whose turn it is may act, and only
     // with their turn's actions. Returns the rules error, or null once it's recorded.
+    // A signed dev session (src/net/devTable.ts) acting as any seat with any of that player's actions.
+    tryAny: (as: string, action: Action): string | null => {
+      const s = latest.current;
+      if (!s) return 'No game is running.';
+      if (!s.state.players.some((p) => p.id === as)) return 'No such seat.';
+      try {
+        applyAction(s.state, as, action, Date.now());
+      } catch (e) {
+        if (e instanceof GameError) return e.message;
+        throw e;
+      }
+      actAs(as, action);
+      return null;
+    },
     tryAs: (as: string, action: Action): string | null => {
       const s = latest.current;
       if (!s) return 'No game is running.';

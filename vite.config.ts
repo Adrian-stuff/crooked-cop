@@ -103,12 +103,12 @@ function devImpersonateRelay(env: Record<string, string>): Plugin {
         let raw = ''
         for await (const chunk of req) raw += chunk
         try {
-          const { op, code, playerId } = JSON.parse(raw || '{}')
-          if (op !== 'devRooms' && op !== 'devImpersonate') return reply(400, { error: 'Unknown request.' })
+          const { op, code, playerId, clientPub, sid } = JSON.parse(raw || '{}')
+          if (op !== 'devRooms' && op !== 'devImpersonate' && op !== 'devPass') return reply(400, { error: 'Unknown request.' })
           const r = await fetch(url, {
             method: 'POST',
             headers: { apikey, Authorization: `Bearer ${apikey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ op, code, playerId, key: env.DEV_IMPERSONATE_KEY }),
+            body: JSON.stringify({ op, code, playerId, clientPub, sid, key: env.DEV_IMPERSONATE_KEY }),
           })
           reply(r.status, await r.json())
         } catch (e) {

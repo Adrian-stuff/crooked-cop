@@ -30,7 +30,8 @@ type Req =
   | { op: 'leave'; code: string; token: string }
   // Local dev only: the Vite dev server on the developer's machine adds the key (never shipped to browsers).
   | { op: 'devRooms'; key: string }
-  | { op: 'devImpersonate'; key: string; code: string; playerId: string };
+  | { op: 'devImpersonate'; key: string; code: string; playerId: string }
+  | { op: 'devPass'; key: string; clientPub: JsonWebKey; sid: string };
 
 interface Room {
   code: string;
@@ -295,6 +296,21 @@ async function handle(req: Req) {
         return { tokens: { ...room.tokens, [token]: req.playerId } };
       });
       return { code: after.code, token };
+    }
+
+    case 'devPass': {
+      // A short-lived pass a facilitator device accepts for dev impersonation (see src/net/devTable.ts).
+      checkDevKey(req.key);
+      const jwk = Deno.env.get('DEV_SIGNING_JWK');
+      if (!jwk) throw new GameError('Dev passes are not set up on the server.');
+      const c = req.clientPub;
+      if (!c || c.kty !== 'EC' || c.crv !== 'P-256' || typeof c.x !== 'string' || typeof c.y !== 'string' || !/^[0-9a-f]{32}$/.test(String(req.sid))) {
+        throw new GameError('Bad dev pass request.');
+      }
+      const key = await crypto.subtle.importKey('jwk', JSON.parse(jwk), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+      const payload = JSON.stringify({ clientPub: { kty: 'EC', crv: 'P-256', x: c.x, y: c.y }, sid: req.sid, exp: t + 15 * 60_000 });
+      const sig = new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, new TextEncoder().encode(payload)));
+      return { payload, sig: btoa(String.fromCharCode(...sig)) };
     }
 
     default:

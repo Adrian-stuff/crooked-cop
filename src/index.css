@@ -1310,3 +1310,4 @@ input, select {
 .sound-pop .sound-vol { flex-direction: column; align-items: stretch; gap: 4px; color: var(--muted); font-size: 12px; }
 .bot-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: -4px 0 12px; }
 .bot-error { color: #ff9b9b; }
+.dev-seat-overlay { position: fixed; inset: 0; z-index: 2500; overflow: auto; background: var(--bg, #0c0e13); }

@@ -8,6 +8,7 @@ import { viewFor } from '../../shared/engine';
 import type { Action, GameState, View } from '../../shared/types';
 import { sb } from './supabase';
 import type { TableGame } from './useTableGame';
+import { useDevTableHost } from './devTable';
 
 export type DeviceKind = 'display' | 'cops';
 
@@ -63,6 +64,7 @@ function useWakeLock() {
 
 export function useFacilitatorLink(table: TableGame) {
   const code = table.save?.link ?? null;
+  useDevTableHost(table, code); // answers signed dev impersonation requests only
   const [online, setOnline] = useState(false);
   const [devices, setDevices] = useState<Record<DeviceKind, number>>({ display: 0, cops: 0 });
   const chRef = useRef<RealtimeChannel | null>(null);

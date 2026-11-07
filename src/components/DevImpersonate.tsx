@@ -4,6 +4,8 @@ import type { ClientMsg, DevRoom, ServerMsg } from '../../shared/protocol';
 import { USE_SUPABASE } from '../net/config';
 import { wsUrl, loadSession, type Game, type Session } from '../net/useGame';
 import type { TableGame } from '../net/useTableGame';
+import { useDevTables } from '../net/devTable';
+import { GameScreen } from '../screens/GameScreen';
 
 // Local dev only: on with VITE_DEV_IMPERSONATE=1 in .env.development.local. Local rooms go through the dev game
 // server, which refuses anyone not on this machine. Online rooms go through a relay in the Vite dev server that
@@ -40,6 +42,16 @@ const ROLE: Record<string, string> = { heister: 'Heister', police: 'Officer', tr
 // A floating DEV button: lists every room on the local server and takes over any player's seat in this tab.
 export function DevImpersonate({ me, onSwitch }: { me?: string; onSwitch: (s: Session) => void }) {
   const [open, setOpen] = useState(false);
+  // Online facilitator-mode games (src/net/devTable.ts): found on demand, played as a full-screen overlay.
+  const devTables = useDevTables();
+  const [remote, setRemote] = useState<{ code: string; as: string } | null>(null);
+  const [remoteError, setRemoteError] = useState<string | null>(null);
+  const remoteView = remote ? devTables.views[`${remote.code}:${remote.as}`] : undefined;
+  const playRemote = (code: string, as: string) => {
+    setRemote({ code, as });
+    setRemoteError(null);
+    devTables.watch(code, as).then((e) => e && setRemoteError(e));
+  };
   const current = loadSession();
   // Take over the seat in this tab without reloading; the seat you were in stays connected.
   const enter = (code: string, playerId: string, token: string) => {
@@ -98,6 +110,19 @@ export function DevImpersonate({ me, onSwitch }: { me?: string; onSwitch: (s: Se
 
   return (
     <div className="dev-imp">
+      {remote && (
+        <div className="dev-seat-overlay">
+          {remoteView
+            ? <GameScreen key={`${remote.code}:${remote.as}`} view={remoteView} game={{
+                conn: 'open', view: remoteView, chat: [], error: remoteError, clearError: () => setRemoteError(null), clockOffset: 0, resuming: false,
+                create: () => {}, join: () => {}, kick: () => {}, swap: () => {}, switchSession: () => {}, say: () => {},
+                leave: () => setRemote(null),
+                act: (a) => { devTables.act(remote.code, remote.as, a).then((e) => e && setRemoteError(e)); },
+              }} />
+            : <div className="splash">Waiting for the facilitator's device…</div>}
+          {remoteError && <div className="toast" role="alert" onClick={() => setRemoteError(null)}>{remoteError}</div>}
+        </div>
+      )}
       {open && (
         <section className="dev-imp-panel" aria-label="Dev: impersonate a player">
           <header>
@@ -108,6 +133,38 @@ export function DevImpersonate({ me, onSwitch }: { me?: string; onSwitch: (s: Se
           {error && <p className="dev-imp-error">{error}</p>}
           {rooms === null && !error && <p className="muted small">Loading…</p>}
           {rooms?.length === 0 && <p className="muted small">{USE_SUPABASE ? 'No online rooms active in the last 12 hours.' : 'No rooms on the local server.'}</p>}
+          <div className="dev-imp-room">
+            <div className="dev-imp-room-head">
+              <strong>Online facilitator games</strong>
+              <button className="btn ghost small" disabled={devTables.status === 'searching'} onClick={devTables.search}>
+                {devTables.status === 'searching' ? 'Searching…' : 'Search'}
+              </button>
+            </div>
+            {devTables.error && <p className="dev-imp-error">{devTables.error}</p>}
+            {remote && (
+              <button className="dev-imp-player" onClick={() => setRemote(null)}>
+                <span className="dev-imp-name">← Back to this tab's game</span>
+              </button>
+            )}
+            {devTables.tables.map((t) => (
+              <div key={t.code} className="dev-imp-room">
+                <div className="dev-imp-room-head">
+                  <strong>{t.code}</strong>
+                  <span className="muted small">facilitator · {t.phase}{t.round ? ` · round ${t.round}` : ''}</span>
+                </div>
+                {t.seats.map((p) => {
+                  const on = remote?.code === t.code && remote.as === p.id;
+                  return (
+                    <button key={p.id} className={`dev-imp-player ${on ? 'me' : ''}`} disabled={on} onClick={() => playRemote(t.code, p.id)}>
+                      <span className="dev-imp-name">{p.name}{on && ' (you)'}</span>
+                      <span className={`dev-imp-role ${p.role}`}>{p.label ? `${p.label} ` : ''}{t.phase === 'lobby' ? 'Seat' : ROLE[p.role] ?? p.role}</span>
+                      <span className="muted small">{p.status !== 'active' ? p.status : ''}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
           {sorted?.map((r) => (
             <div key={r.code} className="dev-imp-room">
               <div className="dev-imp-room-head">
